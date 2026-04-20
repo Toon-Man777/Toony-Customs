@@ -1,14 +1,16 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Special Summon from hand
+	-- Effect 1: Special Summon from hand
 	local e1=Effect.CreateEffect(c)
-	e1:SetType(EFFECT_TYPE_IGNITION)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetType(EFFECT_TYPE_FIELD)
+	e1:SetCode(EFFECT_SPSUMMON_PROC)
+	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
 	e1:SetRange(LOCATION_HAND)
 	e1:SetCondition(s.spcon)
-	e1:SetTarget(s.sptg)
-	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
-	-- Dinosaur ATK/DEF boost
+
+	-- Effect 2: Continuous ATK/DEF boost for Dinosaurs
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetCode(EFFECT_UPDATE_ATTACK)
@@ -20,35 +22,44 @@ function s.initial_effect(c)
 	local e3=e2:Clone()
 	e3:SetCode(EFFECT_UPDATE_DEFENSE)
 	c:RegisterEffect(e3)
-	-- Buff Doodle Beasts if tributed
+
+	-- Effect 3: Trigger when used as Tribute for a Dinosaur
 	local e4=Effect.CreateEffect(c)
+	e4:SetDescription(aux.Stringid(id,1))
+	e4:SetCategory(CATEGORY_ATKCHANGE+CATEGORY_DEFCHANGE)
 	e4:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
-	e4:SetCode(EVENT_RELEASED)
-	e4:SetCondition(s.bufcon)
-	e4:SetOperation(s.bufop)
+	e4:SetCode(EVENT_BE_PRE_MATERIAL)
+	e4:SetCondition(s.atkcon)
+	e4:SetOperation(s.atkop)
 	c:RegisterEffect(e4)
 end
-s.listed_series={0x1518}
-function s.spcon(e,tp,eg,ep,ev,re,r,rp)
-	local g=Duel.GetFieldGroup(tp,LOCATION_MZONE,0)
-	return #g==0 or not g:IsExists(aux.NOT(Card.IsRace),1,nil,RACE_DINOSAUR)
+
+-- Archetype: Doodle Beast (0x1186)
+s.listed_series={0x1186}
+
+-- Condition: No monsters or only Dinosaurs
+function s.spfilter(c)
+	return c:IsFaceup() and not c:IsRace(RACE_DINOSAUR)
 end
-function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
-		and e:GetHandler():IsCanBeSpecialSummoned(e,0,tp,false,false) end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,e:GetHandler(),1,0,0)
+function s.spcon(e,c)
+	if c==nil then return true end
+	local tp=c:GetControler()
+	return Duel.GetFieldGroupCount(tp,LOCATION_MZONE,0)==0 
+		or not Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_MZONE,0,1,nil)
 end
-function s.spop(e,tp,eg,ep,ev,re,r,rp)
+
+-- Condition: Used as Tribute for a Dinosaur monster
+function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	if c:IsRelateToEffect(e) then Duel.SpecialSummon(c,0,tp,tp,false,false,POS_FACEUP) end
+	local rc=c:GetReasonCard()
+	return r & REASON_TRIBUTE ~= 0 and rc:IsRace(RACE_DINOSAUR)
 end
-function s.bufcon(e,tp,eg,ep,ev,re,r,rp)
-	local rc=e:GetHandler():GetReasonCard()
-	return rc and rc:IsRace(RACE_DINOSAUR)
-end
-function s.bufop(e,tp,eg,ep,ev,re,r,rp)
-	local g=Duel.GetMatchingGroup(aux.FaceupFilter(Card.IsSetCard,0x1518),tp,LOCATION_MZONE,0,nil)
-	for tc in aux.Next(g) do
+
+-- Operation: All "Doodle Beast" monsters gain 1000 ATK/DEF
+function s.atkop(e,tp,eg,ep,ev,re,r,rp)
+	local g=Duel.GetMatchingGroup(aux.FaceupFilter(Card.IsSetCard,0x1186),tp,LOCATION_MZONE,0,nil)
+	local tc=g:GetFirst()
+	while tc do
 		local e1=Effect.CreateEffect(e:GetHandler())
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetCode(EFFECT_UPDATE_ATTACK)
@@ -58,5 +69,6 @@ function s.bufop(e,tp,eg,ep,ev,re,r,rp)
 		local e2=e1:Clone()
 		e2:SetCode(EFFECT_UPDATE_DEFENSE)
 		tc:RegisterEffect(e2)
+		tc=g:GetNext()
 	end
 end

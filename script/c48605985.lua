@@ -24,8 +24,8 @@ function s.initial_effect(c)
 	e3:SetOperation(s.gyop)
 	c:RegisterEffect(e3)
 end
-s.listed_series={0x1518}
-function s.thfilter(c) return c:IsSetCard(0x1518) and c:IsMonster() and c:IsAbleToHand() end
+s.listed_series={0x1186}
+function s.thfilter(c) return c:IsSetCard(0x1186) and c:IsMonster() and c:IsAbleToHand() end
 function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK,0,1,nil) end
 	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK)
@@ -35,7 +35,7 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	if #g>0 then Duel.SendtoHand(g,nil,REASON_EFFECT) Duel.ConfirmCards(1-tp,g) end
 end
 function s.gycon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(Card.IsSetCard,1,nil,0x1518) and eg:IsExists(Card.IsReason,1,nil,REASON_EFFECT)
+	return eg:IsExists(Card.IsSetCard,1,nil,0x1186) and eg:IsExists(Card.IsReason,1,nil,REASON_EFFECT)
 end
 function s.gytg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return e:GetHandler():IsAbleToHand() end
