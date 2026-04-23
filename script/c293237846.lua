@@ -1,6 +1,7 @@
 local s,id=GetID()
 function s.initial_effect(c)
 	c:EnableReviveLimit()
+	
 	-- Always treated as "Gaia the Fierce Knight"
 	local e0=Effect.CreateEffect(c)
 	e0:SetType(EFFECT_TYPE_SINGLE)
@@ -8,6 +9,11 @@ function s.initial_effect(c)
 	e0:SetCode(EFFECT_ADD_SETCARD)
 	e0:SetValue(0xbd) -- "Gaia the Fierce Knight" setcode
 	c:RegisterEffect(e0)
+	
+	-- Add "Chaos" setcode so Ritual Spells can find it
+	local e_chaos=e0:Clone()
+	e_chaos:SetValue(0xcf) -- "Chaos" setcode
+	c:RegisterEffect(e_chaos)
 
 	-- Name becomes "Gaia the Dragon Champion" in Monster Zone
 	local e1=Effect.CreateEffect(c)
@@ -24,7 +30,7 @@ function s.initial_effect(c)
 	e2:SetCode(EFFECT_PIERCE)
 	c:RegisterEffect(e2)
 
-	-- Target 1 monster: Make DEF 0 and change to Defense
+	-- Target 1 monster: DEF 0 and change to Defense
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,0))
 	e3:SetCategory(CATEGORY_DEFCHANGE+CATEGORY_POSITION)
@@ -37,7 +43,7 @@ function s.initial_effect(c)
 	e3:SetOperation(s.defop)
 	c:RegisterEffect(e3)
 	
-	-- Tracker for material check
+	-- Material Check tracker
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_SINGLE)
 	e4:SetCode(EFFECT_MATERIAL_CHECK)
@@ -47,10 +53,10 @@ end
 
 s.listed_names={21082832, 66889139} -- Chaos Form, Gaia the Dragon Champion
 
--- Material Check: Was a non-Effect monster used?
+-- Check if a non-Effect monster was used as material
 function s.valcheck(e,c)
 	local g=c:GetMaterial()
-	if g:IsExists(aux.NOT(Card.IsType),1,nil,TYPE_EFFECT) then
+	if g:IsExists(function(mc) return not mc:IsType(TYPE_EFFECT) end,1,nil) then
 		c:RegisterFlagEffect(id,RESET_EVENT+RESETS_STANDARD-RESET_TOHAND-RESET_LEAVE,0,1)
 	end
 end
