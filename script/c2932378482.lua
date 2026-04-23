@@ -16,7 +16,7 @@ function s.initial_effect(c)
 	e2:SetCode(EFFECT_INDESTRUCTABLE_BY_EFFECT)
 	c:RegisterEffect(e2)
 
-	-- Standby Phase: Gains 3000 ATK
+	-- During the Standby Phase, This card gains 3000 ATK
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,0))
 	e3:SetCategory(CATEGORY_ATKCHANGE)
@@ -57,10 +57,11 @@ function s.indes(e,c)
 	local lv=c:GetLevel()
 	local rk=c:GetRank()
 	local lk=c:GetLink()
+	-- Level/Rank 9 or lower, or Link 3 or lower
 	return (lv>0 and lv<=9) or (rk>0 and rk<=9) or (lk>0 and lk<=3)
 end
 
--- ATK Gain Logic
+-- ATK Gain Logic (Standby Phase)
 function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if c:IsRelateToEffect(e) and c:IsFaceup() then
@@ -73,9 +74,10 @@ function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- ATK Reset Logic
+-- ATK Reset Logic (End of Damage Step)
 function s.atkreset(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
+	-- Only reset if it actually attacked
 	if c:IsRelateToBattle() and c:IsFaceup() then
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
@@ -86,12 +88,12 @@ function s.atkreset(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Floating Effect Logic
+-- Special Summon materials from GY
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
 	local mg=c:GetMaterial()
-	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if chk==0 then return ft>=#mg and #mg>0 
+	-- Check if materials exist and space is available
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>=#mg and #mg>0 
 		and mg:FilterCount(aux.NecroValleyFilter(Card.IsCanBeSpecialSummoned),nil,e,0,tp,false,false)==#mg end
 	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,mg,#mg,0,0)
 end
@@ -99,8 +101,7 @@ end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	local mg=c:GetMaterial()
-	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if ft<#mg then return end
+	if Duel.GetLocationCount(tp,LOCATION_MZONE)<#mg then return end
 	for tc in aux.Next(mg) do
 		if Duel.SpecialSummonStep(tc,0,tp,tp,false,false,POS_FACEUP) then
 			-- Negate effects until Standby Phase
