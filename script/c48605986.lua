@@ -37,8 +37,8 @@ function s.initial_effect(c)
 	c:RegisterEffect(e4)
 end
 
--- Setcode: Doodle Beast (1518 / 0x5ee)
-s.listed_series={0x5ee}
+-- Setcode: Doodle Beast (1186)
+s.listed_series={0x1186}
 
 -- Special Tribute Summon Procedure
 function s.otfilter(c)
@@ -92,5 +92,5 @@ end
 function s.atkcon(e)
 	local c=e:GetHandler()
 	-- Only active if a "Doodle Beast" monster was used as Tribute material
-	return c:GetSummonType()==SUMMON_TYPE_TRIBUTE and c:GetMaterial():IsExists(Card.IsSetCard,1,nil,0x1518)
+	return c:GetSummonType()==SUMMON_TYPE_TRIBUTE and c:GetMaterial():IsExists(Card.IsSetCard,1,nil,0x1186)
 end
