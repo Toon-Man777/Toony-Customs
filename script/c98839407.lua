@@ -29,7 +29,7 @@ function s.initial_effect(c)
 	e2:SetOperation(s.thop)
 	c:RegisterEffect(e2)
 	
-	-- 3. Detach & Negate/Halve ATK + Stat Gain
+	-- 3. UPDATED: Detach & Negate (ATK Halving is now an optional part of resolution)
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,2))
 	e3:SetCategory(CATEGORY_DISABLE+CATEGORY_ATKCHANGE)
@@ -42,7 +42,7 @@ function s.initial_effect(c)
 	e3:SetOperation(s.disop)
 	c:RegisterEffect(e3)
 	
-	-- 4. Start of Battle Phase: Banish 2 "Cursed" Spells to gain multi-attack
+	-- 4. UPDATED: Start of Battle Phase: Banish 2 from GY ONLY, attack all monsters once
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,3))
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
@@ -63,7 +63,7 @@ function s.initial_effect(c)
 	c:RegisterEffect(e5)
 end
 
--- Effect 1: Rank 4 alternative overlay logic
+-- Alternative Overlay Logic
 function s.xyzfilter(c,xyzc,tp)
 	return c:IsFaceup() and c:IsRank(4) and c:IsAttribute(ATTRIBUTE_DARK) and c:IsRace(RACE_DRAGON) and c:IsType(TYPE_XYZ)
 		and Duel.GetLocationCountFromEx(tp,tp,c,xyzc)>0
@@ -96,7 +96,7 @@ function s.xyzop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
 	g:DeleteWithCell()
 end
 
--- Effect 2: Search Logic ("Cursed" Spell)
+-- Search Logic
 function s.thfilter(c)
 	return c:IsSetCard(0x923) and c:IsSpell() and c:IsAbleToHand()
 end
@@ -113,7 +113,7 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 3: Detach & Negate/Halve ATK logic
+-- Detach & Negate Logic
 function s.discost(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
 	if chk==0 then return c:CheckRemoveOverlayCard(tp,1,REASON_COST) end
@@ -134,17 +134,13 @@ function s.disop(e,tp,eg,ep,ev,re,r,rp)
 	local tg=Duel.GetTargetCards(e)
 	if #tg==0 then return end
 	
-	local val_total=0
+	local negated_group=Group.CreateGroup()
+	
 	for tc in aux.Next(tg) do
-		if tc:IsFaceup() and tc:IsRelateToEffect(e) then
-			local rating=0
-			if tc:IsType(TYPE_LINK) then rating=tc:GetLink()
-			elseif tc:IsType(TYPE_XYZ) then rating=tc:GetRank()
-			else rating=tc:GetLevel() end
-			val_total = val_total + rating
+		if tc:IsFaceup() and tc:IsRelateToEffect(e) and not tc:IsDisabled() then
+			Duel.NegateRelatedChain(tc,RESET_TURN_SET)
 			
 			-- Negate Effects
-			Duel.NegateRelatedChain(tc,RESET_TURN_SET)
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_SINGLE)
 			e1:SetCode(EFFECT_DISABLE)
@@ -157,53 +153,51 @@ function s.disop(e,tp,eg,ep,ev,re,r,rp)
 			e2:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
 			tc:RegisterEffect(e2)
 			
-			-- Halve ATK
-			local e3=Effect.CreateEffect(c)
-			e3:SetType(EFFECT_TYPE_SINGLE)
-			e3:SetCode(EFFECT_SET_ATTACK_FINAL)
-			e3:SetValue(math.ceil(tc:GetAttack()/2))
-			e3:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
-			tc:RegisterEffect(e3)
+			if tc:IsDisabled() then
+				negated_group:AddCard(tc)
+			end
 		end
 	end
 	
-	-- ATK Boost
-	if val_total > 0 and c:IsRelateToEffect(e) and c:IsFaceup() then
-		local e4=Effect.CreateEffect(c)
-		e4:SetType(EFFECT_TYPE_SINGLE)
-		e4:SetCode(EFFECT_UPDATE_ATTACK)
-		e4:SetValue(val_total * 250)
-		e4:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
-		c:RegisterEffect(e4)
+	-- "You can halve the attack of negated monsters on the field." (Optional choice during resolution)
+	if #negated_group>0 and Duel.SelectYesNo(tp,aux.Stringid(id,4)) then
+		for tc in aux.Next(negated_group) do
+			if tc:IsLocation(LOCATION_MZONE) and tc:IsFaceup() then
+				local e3=Effect.CreateEffect(c)
+				e3:SetType(EFFECT_TYPE_SINGLE)
+				e3:SetCode(EFFECT_SET_ATTACK_FINAL)
+				e3:SetValue(math.ceil(tc:GetAttack()/2))
+				e3:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+				tc:RegisterEffect(e3)
+			end
+		end
 	end
 end
 
--- Effect 4: Attack All Modified Monsters Logic
+-- Battle Phase Multi-Attack Logic (GY Banish Only)
 function s.cfilter(c)
 	return c:IsSetCard(0x923) and c:IsSpell() and c:IsAbleToBanishAsCost()
 end
 function s.atkcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(s.cfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,2,nil) end
+	if chk==0 then return Duel.IsExistingMatchingCard(s.cfilter,tp,LOCATION_GRAVE,0,2,nil) end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
-	local g=Duel.SelectMatchingCard(tp,s.cfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,2,2,nil)
+	local g=Duel.SelectMatchingCard(tp,s.cfilter,tp,LOCATION_GRAVE,0,2,2,nil)
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
 end
 function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if c:IsRelateToEffect(e) and c:IsFaceup() then
+		-- Allows the card to attack all opponent's monsters once each
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetCode(EFFECT_ATTACK_ALL)
-		e1:SetValue(s.atkfilter)
+		e1:SetValue(1)
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
 		c:RegisterEffect(e1)
 	end
 end
-function s.atkfilter(e,c)
-	return c:GetAttack() ~= c:GetBaseAttack()
-end
 
--- Effect 5: End Step Shift to Defense
+-- End Phase Switch to Defense Position
 function s.poscon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():GetAttackedCount()>0
 end
