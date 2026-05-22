@@ -1,6 +1,5 @@
-
 local s,id=GetID()
-function c94619959.initial_effect(c)
+function s.initial_effect(c)
 	c:EnableReviveLimit()
 	
 	-- 1. Special Summon Condition: Must first be SS by sending 3 "Reactor" monsters from field to GY

@@ -1,5 +1,4 @@
 --Abyssal Flattop
-function c94619959.initial_effect(c)
 	local s,id=GetID()
 function s.initial_effect(c)
 	-- Synchro Summon materials
