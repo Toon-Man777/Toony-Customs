@@ -1,157 +1,215 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Xyz Summon: 4 Level 5 Monsters
-	Xyz.AddProcedure(c,nil,5,4,s.ovfilter,aux.Stringid(id,0))
+	-- Xyz Summon Procedure: 4 Level 5 monsters
+	Xyz.AddProcedure(c,nil,5,4)
 	c:EnableReviveLimit()
-
-	-- Search "Cursed" Spell on Summon
+	
+	-- 1. Alternative Xyz Summon using a Rank 4 DARK Dragon Xyz
 	local e1=Effect.CreateEffect(c)
-	e1:SetCategory(0x2) -- CATEGORY_TOHAND+CATEGORY_SEARCH
-	e1:SetType(1+0x40) -- EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O
-	e1:SetCode(1011) -- EVENT_SPSUMMON_SUCCESS
-	e1:SetProperty(0x10000) -- EFFECT_FLAG_DELAY
-	e1:SetCountLimit(1,id)
-	e1:SetCondition(s.thcon)
-	e1:SetTarget(s.thtg)
-	e1:SetOperation(s.thop)
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetType(EFFECT_TYPE_FIELD)
+	e1:SetCode(EFFECT_SPSUMMON_PROC)
+	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
+	e1:SetRange(LOCATION_EXTRA)
+	e1:SetCondition(s.xyzcon)
+	e1:SetTarget(s.xyztg)
+	e1:SetOperation(s.xyzop)
 	c:RegisterEffect(e1)
-
-	-- Detach to Negate and Half ATK
+	
+	-- 2. On Xyz Summoned: Search 1 "Cursed" Spell
 	local e2=Effect.CreateEffect(c)
-	e2:SetCategory(0x10+0x2000) -- CATEGORY_ATKCHANGE+CATEGORY_DISABLE
-	e2:SetType(4) -- EFFECT_TYPE_IGNITION
-	e2:SetRange(4) -- LOCATION_MZONE
-	e2:SetProperty(0x100) -- EFFECT_FLAG_CARD_TARGET
-	e2:SetCountLimit(1,id+1)
-	e2:SetCost(s.negcost)
-	e2:SetTarget(s.negtg)
-	e2:SetOperation(s.negop)
+	e2:SetDescription(aux.Stringid(id,1))
+	e2:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
+	e2:SetCountLimit(1,id)
+	e2:SetCondition(aux.XyzSummonedCondition)
+	e2:SetTarget(s.thtg)
+	e2:SetOperation(s.thop)
 	c:RegisterEffect(e2)
-
-	-- Battle Phase: Banish 2 "Cursed" Spells to multi-attack
+	
+	-- 3. Detach & Negate/Halve ATK + Stat Gain
 	local e3=Effect.CreateEffect(c)
-	e3:SetType(4)
-	e3:SetRange(4)
-	e3:SetCountLimit(1,id+2)
-	e3:SetCondition(s.atkcon)
-	e3:SetCost(s.atkcost)
-	e3:SetOperation(s.atkop)
+	e3:SetDescription(aux.Stringid(id,2))
+	e3:SetCategory(CATEGORY_DISABLE+CATEGORY_ATKCHANGE)
+	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetProperty(EFFECT_FLAG_CARD_TARGET)
+	e3:SetRange(LOCATION_MZONE)
+	e3:SetCountLimit(1,id+1)
+	e3:SetCost(s.discost)
+	e3:SetTarget(s.distg)
+	e3:SetOperation(s.disop)
 	c:RegisterEffect(e3)
-
-	-- End of turn: Switch to defense
+	
+	-- 4. Start of Battle Phase: Banish 2 "Cursed" Spells to gain multi-attack
 	local e4=Effect.CreateEffect(c)
-	e4:SetType(1+0x40)
-	e4:SetCode(1022) -- EVENT_DAMAGE_STEP_END
-	e4:SetRange(4)
-	e4:SetCondition(s.poscon)
-	e4:SetOperation(s.posop)
+	e4:SetDescription(aux.Stringid(id,3))
+	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
+	e4:SetCode(EVENT_PHASE+PHASE_BATTLE_START)
+	e4:SetRange(LOCATION_MZONE)
+	e4:SetCountLimit(1,id+2)
+	e4:SetCost(s.atkcost)
+	e4:SetOperation(s.atkop)
 	c:RegisterEffect(e4)
+	
+	-- 5. End of turn: Switch to defense mode if it attacked
+	local e5=Effect.CreateEffect(c)
+	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e5:SetCode(EVENT_PHASE+PHASE_END)
+	e5:SetRange(LOCATION_MZONE)
+	e5:SetCondition(s.poscon)
+	e5:SetOperation(s.posop)
+	c:RegisterEffect(e5)
 end
 
--- Alternative Summon: Rank 4 DARK Dragon
-function s.ovfilter(c,tp,lc)
-	return c:IsFaceup() and c:IsType(0x800) and c:IsRank(4) and c:IsAttribute(0x20) and c:IsRace(0x1)
+-- Effect 1: Rank 4 alternative overlay logic
+function s.xyzfilter(c,xyzc,tp)
+	return c:IsFaceup() and c:IsRank(4) and c:IsAttribute(ATTRIBUTE_DARK) and c:IsRace(RACE_DRAGON) and c:IsType(TYPE_XYZ)
+		and Duel.GetLocationCountFromEx(tp,tp,c,xyzc)>0
+end
+function s.xyzcon(e,c,og,min,max)
+	if c==nil then return true end
+	local tp=c:GetControler()
+	return Duel.GetFlagEffect(tp,id)==0 and Duel.IsExistingMatchingCard(s.xyzfilter,tp,LOCATION_MZONE,0,1,nil,c,tp)
+end
+function s.xyztg(e,tp,eg,ep,ev,re,r,rp,chk,c,og,min,max)
+	local g=Duel.SelectMatchingCard(tp,s.xyzfilter,tp,LOCATION_MZONE,0,1,1,nil,c,tp)
+	if #g>0 then
+		g:KeepAlive()
+		e:SetLabelObject(g)
+		return true
+	end
+	return false
+end
+function s.xyzop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
+	local g=e:GetLabelObject()
+	if not g then return end
+	local tc=g:GetFirst()
+	local mg=tc:GetOverlayGroup()
+	if #mg~=0 then
+		Duel.Overlay(c,mg)
+	end
+	c:SetMaterial(g)
+	Duel.Overlay(c,g)
+	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
+	g:DeleteWithCell()
 end
 
--- Search Logic
-function s.thcon(e,tp,eg,ep,ev,re,r,rp)
-	return e:GetHandler():IsSummonType(0x40) -- SUMMON_TYPE_XYZ
-end
+-- Effect 2: Search Logic ("Cursed" Spell)
 function s.thfilter(c)
-	return c:IsSetCard(0x923) and c:IsType(0x2) and c:IsAbleToHand()
+	return c:IsSetCard(0x923) and c:IsSpell() and c:IsAbleToHand()
 end
 function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter,tp,1,0,1,nil) end
-	Duel.SetOperationInfo(0,0x2,nil,1,tp,1)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK,0,1,nil) end
+	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK)
 end
 function s.thop(e,tp,eg,ep,ev,re,r,rp)
-	Duel.Hint(3,tp,506)
-	local g=Duel.SelectMatchingCard(tp,s.thfilter,tp,1,0,1,1,nil)
-	if #g>0 then Duel.SendtoHand(g,nil,64) Duel.ConfirmCards(1-tp,g) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+	local g=Duel.SelectMatchingCard(tp,s.thfilter,tp,LOCATION_DECK,0,1,1,nil)
+	if #g>0 then
+		Duel.SendtoHand(g,nil,REASON_EFFECT)
+		Duel.ConfirmCards(1-tp,g)
+	end
 end
 
--- Negate/Half ATK Logic
-function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,64) end
-	local n=e:GetHandler():GetOverlayCount()
-	local ct=Duel.GetMatchingGroupCount(Card.IsCanBeEffectTarget,tp,0,4,nil,e)
-	if ct>n then ct=n end
-	local oct=Duel.AnnounceNumber(tp,1,ct)
-	e:GetHandler():RemoveOverlayCard(tp,oct,oct,64)
-	e:SetLabel(oct)
-end
-function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
-	if chkc then return chkc:IsControler(1-tp) and chkc:IsLocation(4) and chkc:IsFaceup() end
-	if chk==0 then return Duel.IsExistingTarget(Card.IsFaceup,tp,0,4,1,nil) end
-	local ct=e:GetLabel()
-	Duel.Hint(3,tp,504)
-	local g=Duel.SelectTarget(tp,Card.IsFaceup,tp,0,4,ct,ct,nil)
-end
-function s.negop(e,tp,eg,ep,ev,re,r,rp)
+-- Effect 3: Detach & Negate/Halve ATK logic
+function s.discost(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
-	local g=Duel.GetTargetCards(e)
-	local total_rating=0
-	for tc in aux.Next(g) do
-		local lv=tc:GetLevel()
-		local rk=tc:GetRank()
-		local lk=tc:GetLink()
-		total_rating = total_rating + lv + rk + lk
-		-- Negate and half ATK
-		local e1=Effect.CreateEffect(c)
-		e1:SetType(1)
-		e1:SetCode(108) -- SET_ATTACK_FINAL
-		e1:SetValue(tc:GetAttack()/2)
-		e1:SetReset(0x1fe0000)
-		tc:RegisterEffect(e1)
-		Duel.NegateRelatedChain(tc,64)
-		local e2=Effect.CreateEffect(c)
-		e2:SetType(1)
-		e2:SetCode(11) -- EFFECT_DISABLE
-		e2:SetReset(0x1fe0000)
-		tc:RegisterEffect(e2)
+	if chk==0 then return c:CheckRemoveOverlayCard(tp,1,REASON_COST) end
+	local max_count=c:GetOverlayCount()
+	local ct=Duel.RemoveOverlayCard(tp,c:GetHandlerPlayer(),1,max_count,REASON_COST)
+	e:SetLabel(ct)
+end
+function s.distg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+	if chkc then return chkc:IsLocation(LOCATION_MZONE) and chkc:IsControler(1-tp) and chkc:IsFaceup() end
+	if chk==0 then return Duel.IsExistingTarget(Card.IsFaceup,tp,0,LOCATION_MZONE,1,nil) end
+	local ct=e:GetLabel()
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_NEGATE)
+	local g=Duel.SelectTarget(tp,Card.IsFaceup,tp,0,LOCATION_MZONE,ct,ct,nil)
+	Duel.SetOperationInfo(0,CATEGORY_DISABLE,g,#g,0,0)
+end
+function s.disop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	local tg=Duel.GetTargetCards(e)
+	if #tg==0 then return end
+	
+	local val_total=0
+	for tc in aux.Next(tg) do
+		if tc:IsFaceup() and tc:IsRelateToEffect(e) then
+			local rating=0
+			if tc:IsType(TYPE_LINK) then rating=tc:GetLink()
+			elseif tc:IsType(TYPE_XYZ) then rating=tc:GetRank()
+			else rating=tc:GetLevel() end
+			val_total = val_total + rating
+			
+			-- Negate Effects
+			Duel.NegateRelatedChain(tc,RESET_TURN_SET)
+			local e1=Effect.CreateEffect(c)
+			e1:SetType(EFFECT_TYPE_SINGLE)
+			e1:SetCode(EFFECT_DISABLE)
+			e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+			tc:RegisterEffect(e1)
+			local e2=Effect.CreateEffect(c)
+			e2:SetType(EFFECT_TYPE_SINGLE)
+			e2:SetCode(EFFECT_DISABLE_EFFECT)
+			e2:SetValue(RESET_TURN_SET)
+			e2:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+			tc:RegisterEffect(e2)
+			
+			-- Halve ATK
+			local e3=Effect.CreateEffect(c)
+			e3:SetType(EFFECT_TYPE_SINGLE)
+			e3:SetCode(EFFECT_SET_ATTACK_FINAL)
+			e3:SetValue(math.ceil(tc:GetAttack()/2))
+			e3:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+			tc:RegisterEffect(e3)
+		end
 	end
-	if total_rating>0 and c:IsFaceup() and c:IsRelateToEffect(e) then
-		local e3=Effect.CreateEffect(c)
-		e3:SetType(1)
-		e3:SetCode(100) -- EFFECT_UPDATE_ATTACK
-		e3:SetValue(total_rating*250)
-		e3:SetReset(0x1fe0000)
-		c:RegisterEffect(e3)
+	
+	-- ATK Boost
+	if val_total > 0 and c:IsRelateToEffect(e) and c:IsFaceup() then
+		local e4=Effect.CreateEffect(c)
+		e4:SetType(EFFECT_TYPE_SINGLE)
+		e4:SetCode(EFFECT_UPDATE_ATTACK)
+		e4:SetValue(val_total * 250)
+		e4:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+		c:RegisterEffect(e4)
 	end
 end
 
--- Multi-Attack Logic
-function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.IsPhase(0x08) -- PHASE_BATTLE_START
-end
-function s.atkcostfilter(c)
-	return c:IsSetCard(0x923) and c:IsType(0x2) and c:IsAbleToBanishAsCost()
+-- Effect 4: Attack All Modified Monsters Logic
+function s.cfilter(c)
+	return c:IsSetCard(0x923) and c:IsSpell() and c:IsAbleToBanishAsCost()
 end
 function s.atkcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(s.atkcostfilter,tp,18,0,2,nil) end
-	local g=Duel.SelectMatchingCard(tp,s.atkcostfilter,tp,18,0,2,2,nil)
-	Duel.Remove(g,0,64)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.cfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,2,nil) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
+	local g=Duel.SelectMatchingCard(tp,s.cfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,2,2,nil)
+	Duel.Remove(g,POS_FACEUP,REASON_COST)
 end
 function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	if c:IsRelateToEffect(e) then
-		-- Attack all monsters with modified ATK
+	if c:IsRelateToEffect(e) and c:IsFaceup() then
 		local e1=Effect.CreateEffect(c)
-		e1:SetType(1)
-		e1:SetCode(141) -- EFFECT_ATTACK_ALL
-		e1:SetValue(function(e,tc) return tc:GetAttack()~=tc:GetBaseAttack() end)
-		e1:SetReset(0x2000000+0x08) -- RESET_PHASE+PHASE_BATTLE
+		e1:SetType(EFFECT_TYPE_SINGLE)
+		e1:SetCode(EFFECT_ATTACK_ALL)
+		e1:SetValue(s.atkfilter)
+		e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
 		c:RegisterEffect(e1)
 	end
 end
+function s.atkfilter(e,c)
+	return c:GetAttack() ~= c:GetBaseAttack()
+end
 
--- Defense switch logic
+-- Effect 5: End Step Shift to Defense
 function s.poscon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():GetAttackedCount()>0
 end
 function s.posop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	if c:IsRelateToEffect(e) and c:IsAttackPos() then
-		Duel.ChangePosition(c,0x8) -- POS_FACEUP_DEFENSE
+	if c:IsAttackPos() then
+		Duel.ChangePosition(c,POS_FACEUP_DEFENSE)
 	end
 end

@@ -1,92 +1,139 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Activation Effect: Excavate 5 and choose 1
+	-- 1. Activate: Excavate 5 cards and choose 1 of 3 bullet effects
 	local e1=Effect.CreateEffect(c)
-	e1:SetCategory(0x4000+0x1+0x2+0x4+0x8) -- DECKDES+SPSUMMON+TOHAND+TOGRAVE+REMOVE
-	e1:SetType(0x10000) -- EFFECT_TYPE_ACTIVATE
-	e1:SetCode(0) -- EVENT_FREE_CHAIN
+	e1:SetDescription(aux.Stringid(id,0))
+	e1:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH+CATEGORY_SPECIAL_SUMMON+CATEGORY_TOGRAVE+CATEGORY_REMOVE)
+	e1:SetType(EFFECT_TYPE_ACTIVATE)
+	e1:SetCode(EVENT_FREE_CHAIN)
+	e1:SetCountLimit(1,id)
 	e1:SetTarget(s.target)
 	e1:SetOperation(s.activate)
 	c:RegisterEffect(e1)
 
-	-- Banished Effect: Target protection for "Cursed" monsters
+	-- 2. When banished: Protect "Cursed" card effects from your own monster effects
 	local e2=Effect.CreateEffect(c)
-	e2:SetType(1+0x40) -- EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F
-	e2:SetCode(1004) -- EVENT_REMOVE
-	e2:SetProperty(0x10000) -- EFFECT_FLAG_DELAY
-	e2:SetOperation(s.targetop)
+	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_F)
+	e2:SetCode(EVENT_REMOVE)
+	e2:SetCountLimit(1,id+1)
+	e2:SetOperation(s.protop)
 	c:RegisterEffect(e2)
 end
 
--- Filter for "Cursed" monsters using setcode 0x923
-function s.cursed_filter(c)
-	return c:IsSetCard(0x923) and c:IsFaceup()
-end
-
+-- Excavation targets and check functions
 function s.target(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.GetFieldGroupCount(tp,1,0)>=5 end
-	Duel.SetOperationInfo(0,0x4000,nil,0,tp,5)
+	if chk==0 then 
+		return Duel.GetFieldGroupCount(tp,LOCATION_DECK,0)>=5 
+	end
+	Duel.SetPossibleOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_DECK)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_TOGRAVE,nil,1,tp,LOCATION_DECK)
+	Duel.SetPossibleOperationInfo(0,CATEGORY_REMOVE,nil,1,PLAYER_ALL,LOCATION_GRAVE)
 end
 
 function s.activate(e,tp,eg,ep,ev,re,r,rp)
-	if Duel.GetFieldGroupCount(tp,1,0)<5 then return end
+	if Duel.GetFieldGroupCount(tp,LOCATION_DECK,0)<5 then return end
+	Duel.BreakEffect()
 	Duel.ConfirmDecktop(tp,5)
 	local g=Duel.GetDecktopGroup(tp,5)
-	if #g>0 then
-		Duel.DisableShuffleCheck()
-		
-		-- Logic for the three choices
-		local sg1=g:Filter(function(c) return c:IsType(0x1) and c:IsLevelBelow(4) and c:IsCanBeSpecialSummoned(e,0,tp,false,false) end,nil)
-		local sg2=g:Filter(function(c) return c:IsType(0x1) and c:IsAbleToHand() end,nil)
-		local sg3=g:Filter(function(c) return c:IsType(0x2+0x4) and c:IsAbleToGrave() end,nil)
-		
-		local b1 = #sg1>0 and Duel.GetLocationCount(tp,4)>0
-		local b2 = #sg2>0
-		local b3 = #sg3>0
-		
-		local op=Duel.SelectEffect(tp,
-			{b1,aux.Stringid(id,0)}, -- Special Summon 1 Level 4 or lower
-			{b2,aux.Stringid(id,1)}, -- Add 1 monster to hand
-			{b3,aux.Stringid(id,2)}) -- Send 1 S/T to GY, then banish 1 from either GY
-		
-		local sel_card=nil
-		if op==1 then
-			sel_card=sg1:Select(tp,1,1,nil):GetFirst()
-			Duel.SpecialSummon(sel_card,0,tp,tp,false,false,1)
-		elseif op==2 then
-			sel_card=sg2:Select(tp,1,1,nil):GetFirst()
-			Duel.SendtoHand(sel_card,nil,64)
-			Duel.ConfirmCards(1-tp,sel_card)
-		elseif op==3 then
-			sel_card=sg3:Select(tp,1,1,nil):GetFirst()
-			if Duel.SendtoGrave(sel_card,64)>0 then
-				Duel.Hint(3,tp,505) -- HINTMSG_REMOVE
-				local bg=Duel.SelectMatchingCard(tp,nil,tp,16+16*65536,16+16*65536,1,1,nil)
-				if #bg>0 then Duel.Remove(bg,0,64) end
-			end
+	if #g==0 then return end
+	
+	-- Evaluate legal choices based on what was excavated
+	local b1=g:IsExists(Card.IsLevelBelow,1,nil,4) and Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+	local b2=g:IsExists(Card.IsType,1,nil,TYPE_MONSTER) and g:IsExists(Card.IsAbleToHand,1,nil)
+	local b3=g:IsExists(Card.IsType,1,nil,TYPE_SPELL+TYPE_TRAP) and Duel.IsExistingMatchingCard(Card.IsAbleToBanish,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,nil)
+
+	-- Prompt player choice based on available legal options
+	local op=Duel.SelectEffect(tp,
+		{b1, aux.Stringid(id,1)}, -- Special Summon
+		{b2, aux.Stringid(id,2)}, -- Add to Hand
+		{b3, aux.Stringid(id,3)}) -- Send to GY + Banish GY
+
+	if op==1 then
+		-- Bullet 1: Special Summon 1 Level 4 or lower monster
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+		local sg=g:FilterSelect(tp,Card.IsLevelBelow,1,1,nil,4)
+		if #sg>0 then
+			Duel.SpecialSummon(sg,0,tp,tp,false,false,POS_FACEUP)
+			g:RemoveCard(sg:GetFirst())
 		end
 		
-		-- Remaining cards to the bottom of the deck
-		if sel_card then g:RemoveCard(sel_card) end
-		if #g>0 then
-			Duel.SortDecktop(tp,tp,#g)
-			for i=1,#g do
-				local dg=Duel.GetDecktopGroup(tp,1)
-				Duel.MoveSequence(dg:GetFirst(),1) -- 1 is SEQ_DECKBOTTOM
+	elseif op==2 then
+		-- Bullet 2: Add 1 monster to hand
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
+		local sg=g:FilterSelect(tp,Card.IsType,1,1,nil,TYPE_MONSTER)
+		if #sg>0 then
+			Duel.SendtoHand(sg,nil,REASON_EFFECT)
+			Duel.ConfirmCards(1-tp,sg)
+			g:RemoveCard(sg:GetFirst())
+		end
+		
+	elseif op==3 then
+		-- Bullet 3: Send 1 Spell/Trap to GY, then banish 1 card from either GY
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
+		local sg=g:FilterSelect(tp,Card.IsType,1,1,nil,TYPE_SPELL+TYPE_TRAP)
+		if #sg>0 then
+			local tc=sg:GetFirst()
+			if Duel.SendtoGrave(tc,REASON_EFFECT)>0 and tc:IsLocation(LOCATION_GRAVE) then
+				g:RemoveCard(tc)
+				-- Put remainder on bottom BEFORE performing the next mandatory action
+				Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TODECK)
+				local rg=g:Select(tp,0,5,nil)
+				if #rg>0 then
+					Duel.SortDecktop(tp,tp,#rg)
+					for i=1,#rg do
+						local dc=Duel.GetDecktopGroup(tp,1):GetFirst()
+						Duel.MoveSequence(dc,SEQ_DECKBOTTOM)
+					end
+				end
+				g:Clear() -- Cleared so double bottom-deck script segment doesn't duplicate
+				
+				-- Perform the required banish from either GY
+				Duel.BreakEffect()
+				Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
+				local bg=Duel.SelectMatchingCard(tp,Card.IsAbleToBanish,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,1,nil)
+				if #bg>0 then
+					Duel.Remove(bg,POS_FACEUP,REASON_EFFECT)
+				end
+			end
+		end
+	end
+
+	-- Place the remaining unchosen cards on the bottom of the deck (For Bullet 1 & 2 operations)
+	if #g>0 then
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TODECK)
+		local rg=g:Select(tp,0,5,nil)
+		if #rg>0 then
+			Duel.SortDecktop(tp,tp,#rg)
+			for i=1,#rg do
+				local dc=Duel.GetDecktopGroup(tp,1):GetFirst()
+				Duel.MoveSequence(dc,SEQ_DECKBOTTOM)
 			end
 		end
 	end
 end
 
-function s.targetop(e,tp,eg,ep,ev,re,r,rp)
-	local g=Duel.GetMatchingGroup(s.cursed_filter,tp,4,0,nil)
-	for tc in aux.Next(g) do
-		-- Cannot be targeted by card effects until end of turn
-		local e1=Effect.CreateEffect(e:GetHandler())
-		e1:SetType(1) -- EFFECT_TYPE_SINGLE
-		e1:SetCode(160) -- EFFECT_CANNOT_BE_EFFECT_TARGET
-		e1:SetValue(aux.tgoval)
-		e1:SetReset(0x2000000+0x02) -- RESET_PHASE+PHASE_END
-		tc:RegisterEffect(e1)
-	end
+-- Banished effect: Protection handler
+function s.protop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	
+	-- 1. Protect card effects from destruction by your own monster effects
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_FIELD)
+	e1:SetCode(EFFECT_INDESTRUCTABLE_EFFECT)
+	e1:SetTargetRange(LOCATION_ONFIELD+LOCATION_GRAVE+LOCATION_REMOVED+LOCATION_HAND,0)
+	e1:SetTarget(s.protg)
+	e1:SetValue(s.indval)
+	e1:SetReset(RESET_PHASE+PHASE_END)
+	Duel.RegisterEffect(e1,tp)
+end
+
+function s.protg(e,c)
+	-- Protects any card that belongs to your "Cursed" (0x923) archetype
+	return c:IsSetCard(0x923)
+end
+
+function s.indval(e,re,rp)
+	-- Checks if the source trying to destroy it is a monster effect (TYPE_MONSTER) controlled by you (rp == e:GetHandlerPlayer())
+	return (re:GetHandler():IsType(TYPE_MONSTER)) and rp==e:GetHandlerPlayer()
 end
