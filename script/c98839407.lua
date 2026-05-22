@@ -40,14 +40,14 @@ function s.initial_effect(c)
 	e3:SetOperation(s.disop)
 	c:RegisterEffect(e3)
 	
-	-- 4. Start of Battle Phase: Banish 2 Spells from GY to attack all monsters once
+	-- 4. Ignition Effect: Banish 2 Spells from GY to attack twice this turn
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,3))
-	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-	e4:SetCode(EVENT_PHASE+PHASE_BATTLE_START)
+	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCountLimit(1,id+2)
 	e4:SetCost(s.atkcost)
+	e4:SetTarget(s.atktg)
 	e4:SetOperation(s.atkop)
 	c:RegisterEffect(e4)
 end
@@ -82,7 +82,7 @@ function s.xyzop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
 	c:SetMaterial(g)
 	Duel.Overlay(c,g)
 	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
-	g:DeleteWithCell()
+	g:Clear()
 end
 
 -- Effect 2: Excavation Engine
@@ -125,13 +125,11 @@ function s.disop(e,tp,eg,ep,ev,re,r,rp)
 	
 	local atk_sum=0
 	for tc in aux.Next(g) do
-		-- Keep running tally of current physical attacks on the board
 		local current_atk = tc:GetAttack()
 		if current_atk > 0 then
 			atk_sum = atk_sum + current_atk
 		end
 		
-		-- Permanently close down active monster tracks on board
 		Duel.NegateRelatedChain(tc,RESET_TURN_SET)
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
@@ -146,7 +144,6 @@ function s.disop(e,tp,eg,ep,ev,re,r,rp)
 		tc:RegisterEffect(e2)
 	end
 	
-	-- Grant half of the gathered board attack value to this monster
 	if atk_sum > 0 and c:IsRelateToEffect(e) and c:IsFaceup() then
 		local gain_val = math.floor(atk_sum / 2)
 		local e3=Effect.CreateEffect(c)
@@ -158,9 +155,9 @@ function s.disop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 4: Battle Phase Multi-Attack (Generic Spells)
+-- Effect 4: Banish 2 Spells from GY to Attack Twice
 function s.atkcostfilter(c)
-	return c:IsSpell() and c:IsAbleToBanishAsCost()
+	return c:IsSpell() and c:IsAbleToRemoveAsCost()
 end
 function s.atkcost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.atkcostfilter,tp,LOCATION_GRAVE,0,2,nil) end
@@ -168,12 +165,17 @@ function s.atkcost(e,tp,eg,ep,ev,re,r,rp,chk)
 	local g=Duel.SelectMatchingCard(tp,s.atkcostfilter,tp,LOCATION_GRAVE,0,2,2,nil)
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
 end
+function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return e:GetHandler():IsType(TYPE_MONSTER) end
+end
 function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if c:IsRelateToEffect(e) and c:IsFaceup() then
+		-- Apply standard double attack parameter tracking
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_ATTACK_ALL)
+		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
+		e1:SetCode(EFFECT_EXTRA_ATTACK)
 		e1:SetValue(1)
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
 		c:RegisterEffect(e1)
