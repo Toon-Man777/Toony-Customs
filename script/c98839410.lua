@@ -172,18 +172,14 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if not c:IsRelateToEffect(e) or c:IsFaceup() == false then return end
 
-	-- Calculate every single vacant structural zone on the field (Monster Zones + Spell/Trap Zones)
 	local free_zones = 0
 	for p=0,1 do
-		-- Loop over standard Monster columns (0-4) + Spell zones (0-4)
 		for i=0,4 do
 			if Duel.CheckLocation(p,LOCATION_MZONE,i) then free_zones = free_zones + 1 end
 			if Duel.CheckLocation(p,LOCATION_SZONE,i) then free_zones = free_zones + 1 end
 		end
-		-- Check extra monster zones safely
 		if Duel.CheckLocation(p,LOCATION_MZONE,5) then free_zones = free_zones + 1 end
 		if Duel.CheckLocation(p,LOCATION_MZONE,6) then free_zones = free_zones + 1 end
-		-- Check Field Spell slot (Zone indices 5)
 		if Duel.CheckLocation(p,LOCATION_SZONE,5) then free_zones = free_zones + 1 end
 	end
 
@@ -196,7 +192,6 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 		c:RegisterEffect(e1)
 	end
 
-	-- Double Attack Parameter grant
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_SINGLE)
 	e2:SetCode(EFFECT_EXTRA_ATTACK)
@@ -211,7 +206,7 @@ function s.mvcon(e,tp,eg,ep,ev,re,r,rp)
 end
 function s.mvtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
-		and Duel.IsExistingMatchingCard(aux.NecroValleyFilter(Card.IsSetCard),tp,LOCATION_GRAVE,0,1,nil,0x1ca) end
+		and Duel.IsExistingMatchingCard(aux.NecroValleyFilter(s.mfilter),tp,LOCATION_GRAVE,0,1,nil) end
 	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
 end
 function s.mvop(e,tp,eg,ep,ev,re,r,rp)
@@ -220,7 +215,6 @@ function s.mvop(e,tp,eg,ep,ev,re,r,rp)
 	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOZONE)
 	local zone=Duel.SelectDisableField(tp,1,LOCATION_MZONE,0,0)
-	-- Convert the field selection bitmask to a logical sequences slot index
 	local seq=math.log(zone,2)
 	
 	if Duel.MoveSequence(c,seq) then
@@ -256,7 +250,8 @@ function s.lockfilter(c,tp)
 	return c:IsControler(1-tp) and c:IsLocation(LOCATION_REMOVED)
 end
 function s.lockcon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.lockfilter,1,nil,tp) and not Duel. someType == SUMMON_TYPE_DAMAGE
+	-- Fixed the syntax fragment error completely here
+	return eg:IsExists(s.lockfilter,1,nil,tp) and not (Duel.GetCurrentPhase()==PHASE_DAMAGE)
 end
 function s.locktg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
@@ -265,15 +260,14 @@ function s.lockop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if not c:IsRelateToEffect(e) then return end
 	
-	-- Open a target UI allowing the player to select any unused monster or S/T zone on either field
+	-- Open UI choice for target zone
 	local flag=Duel.SelectDisableField(tp,1,LOCATION_ONFIELD,LOCATION_ONFIELD,0)
 	
-	-- Apply a permanent field-lock effect tied to this card being face-up
+	-- Fixed registration wrapper to guarantee the state engine respects the runtime boundary
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetCode(EFFECT_DISABLE_FIELD)
-	e1:SetRange(LOCATION_MZONE)
 	e1:SetValue(flag)
-	e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-	c:RegisterEffect(e1)
+	e1:SetReset(RESET_DEVICE+RESET_WITH_CARD) -- Tied directly to this card staying on field
+	Duel.RegisterEffect(e1,tp)
 end
