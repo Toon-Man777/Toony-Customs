@@ -13,13 +13,13 @@ function s.initial_effect(c)
 	e1:SetValue(s.atkval)
 	c:RegisterEffect(e1)
 
-	-- 2. Quick Effect: Discard 1 "R.B." to Negate Activation & Destroy (FIXED)
+	-- 2. Quick Effect: Discard 1 "R.B." to Negate Activation & Destroy (FIXED FLAGS)
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,0))
 	e2:SetCategory(CATEGORY_NEGATE+CATEGORY_DESTROY)
 	e2:SetType(EFFECT_TYPE_QUICK_O)
 	e2:SetCode(EVENT_CHAINING)
-	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_COND)
+	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_CAL) -- Corrected core engine flags
 	e2:SetRange(LOCATION_MZONE)
 	e2:SetCountLimit(1,id) -- Hard Once Per Turn per effect activation
 	e2:SetCondition(s.negcon)
@@ -74,7 +74,7 @@ function s.initial_effect(c)
 	e6:SetOperation(s.mvop)
 	c:RegisterEffect(e6)
 
-	-- 7. Continuous Zone Lock: Points to opponent's unoccupied monster zones (FIXED)
+	-- 7. Continuous Zone Lock: Points to opponent's unoccupied monster zones
 	local e7=Effect.CreateEffect(c)
 	e7:SetType(EFFECT_TYPE_FIELD)
 	e7:SetRange(LOCATION_MZONE)
@@ -92,7 +92,7 @@ function s.initial_effect(c)
 	e8:SetValue(aux.indoval)
 	c:RegisterEffect(e8)
 
-	-- 9. Trigger Effect: When an opponent's card is banished, lock an unused zone (FIXED)
+	-- 9. Trigger Effect: When an opponent's card is banished, lock an unused zone
 	local e9=Effect.CreateEffect(c)
 	e9:SetDescription(aux.Stringid(id,4))
 	e9:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
@@ -119,7 +119,7 @@ function s.atkval(e,c)
 	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*500
 end
 
--- 2. Hand-Discard Negation Engine (Rewritten to correctly process Chain links)
+-- 2. Hand-Discard Negation Engine
 function s.negcon(e,tp,eg,ep,ev,re,r,rp)
 	return rp~=tp and Duel.IsChainNegatable(ev)
 end
@@ -241,7 +241,7 @@ end
 function s.zonelockval(e)
 	local c=e:GetHandler()
 	local tp=e:GetHandlerPlayer()
-	local zones=c:GetLinkedZone(1-tp) & 0x1f -- Properly captures zones 0-4 from opponent's perspective
+	local zones=c:GetLinkedZone(1-tp) & 0x1f -- Correctly maps zones 0-4 from opponent's side
 	return zones << 16
 end
 
@@ -250,7 +250,7 @@ function s.indcon(e)
 	return e:GetHandler():GetLinkedGroup():IsExists(Card.IsSetCard,1,nil,0x1ca)
 end
 
--- 9. Trigger-Based On-Field Zone Locker (Fixed Reset Constraints)
+-- 9. Trigger-Based On-Field Zone Locker
 function s.lockfilter(c,tp)
 	return c:IsControler(1-tp)
 end
@@ -265,10 +265,8 @@ function s.lockop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if not c:IsRelateToEffect(e) or c:IsFacedown() then return end
 	
-	-- Open native selection window
 	local flag=Duel.SelectDisableField(tp,1,LOCATION_ONFIELD,LOCATION_ONFIELD,0)
 	
-	-- Tied safely to this card staying on the field using internal standard tracking rules
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetCode(EFFECT_DISABLE_FIELD)
