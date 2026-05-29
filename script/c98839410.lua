@@ -4,7 +4,7 @@ function s.initial_effect(c)
 	c:EnableReviveLimit()
 	Link.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,0x1ca),2,99)
 
-	-- 1. Continuous: Gains 300 ATK for each "R.B." monster pointed to (UPDATED TO 300)
+	-- 1. Continuous: Gains 500 ATK for each "R.B." monster pointed to
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_SINGLE)
 	e1:SetCode(EFFECT_UPDATE_ATTACK)
@@ -41,7 +41,7 @@ function s.initial_effect(c)
 	e3:SetOperation(s.banishop)
 	c:RegisterEffect(e3)
 
-	-- 4. Ignition Effect: Banish 2 Spells/Traps from GY to buff ATK & Attack twice (UPDATED TO 300)
+	-- 4. Ignition Effect: Banish 2 Spells/Traps from GY to buff ATK & Attack twice
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,2))
 	e4:SetCategory(CATEGORY_ATKCHANGE)
@@ -54,14 +54,13 @@ function s.initial_effect(c)
 	e4:SetOperation(s.buffop)
 	c:RegisterEffect(e4)
 
-	-- 5. Continuous: Opponent takes half the battle damage involving this card (FIXED MECHANIC)
+	-- 5. Continuous: Opponent takes half the battle damage involving this card
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_FIELD)
 	e5:SetCode(EFFECT_CHANGE_BATTLE_DAMAGE)
 	e5:SetRange(LOCATION_MZONE)
 	e5:SetTargetRange(0,1)
-	e5:SetTarget(s.damtg)
-	e5:SetValue(s.damval)
+	e5:SetValue(aux.ChangeBattleDamage(1,HALF_DAMAGE))
 	c:RegisterEffect(e5)
 
 	-- 6. Trigger Effect: End Phase move self and add 1 "R.B." monster from GY
@@ -109,7 +108,7 @@ function s.initial_effect(c)
 	c:RegisterEffect(e9)
 end
 
--- Shared Safe Global Pool Counter Conditions
+-- Shared Safe Global Pool Counter Conditions (Thrice per turn limit safely managed)
 function s.global_check(tp)
 	return Duel.GetFlagEffect(tp,id)<3
 end
@@ -120,9 +119,9 @@ function s.poolcon(e,tp,eg,ep,ev,re,r,rp)
 	return s.global_check(tp)
 end
 
--- 1. Passive ATK Pointing Calculator (300 ATK Per Monster)
+-- 1. Passive ATK Pointing Calculator
 function s.atkval(e,c)
-	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*300
+	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*500
 end
 
 -- 2. Hand-Discard Negation Engine
@@ -135,7 +134,7 @@ function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
 end
 function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
-	s.global_register(tp)
+	s.global_register(tp) -- Flag updates safely here inside the proper targeting block
 	Duel.SetOperationInfo(0,CATEGORY_NEGATE,eg,1,0,0)
 	if re:GetHandler():IsRelateToEffect(re) and re:GetHandler():IsDestructable() then
 		Duel.SetOperationInfo(0,CATEGORY_DESTROY,eg,1,0,0)
@@ -165,7 +164,7 @@ function s.banishop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 4. Unoccupied Zone Math Scaler (300 ATK Per Zone)
+-- 4. Unoccupied Zone Math Scaler
 function s.buffcost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) 
 		and Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,2,nil) end
@@ -196,7 +195,7 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetCode(EFFECT_UPDATE_ATTACK)
-		e1:SetValue(free_zones * 300)
+		e1:SetValue(free_zones * 500)
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD_DISABLE+RESET_PHASE+PHASE_END)
 		c:RegisterEffect(e1)
 	end
@@ -207,14 +206,6 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 	e2:SetValue(1)
 	e2:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
 	c:RegisterEffect(e2)
-end
-
--- 5. Half Battle Damage Core Engine Verification Filters
-function s.damtg(e,c)
-	return c==e:GetHandler()
-end
-function s.damval(e,re,val)
-	return math.floor(val/2)
 end
 
 -- 6. End Phase Move and Recycle
