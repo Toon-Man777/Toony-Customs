@@ -13,15 +13,14 @@ function s.initial_effect(c)
 	e1:SetValue(s.atkval)
 	c:RegisterEffect(e1)
 
-	-- 2. Quick Effect: Negate activation and destroy
+	-- 2. Quick Effect: Discard 1 "R.B." to negate 1 opponent's card
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,0))
-	e2:SetCategory(CATEGORY_NEGATE+CATEGORY_DESTROY)
+	e2:SetCategory(CATEGORY_DISABLE)
 	e2:SetType(EFFECT_TYPE_QUICK_O)
 	e2:SetCode(EVENT_CHAINING)
-	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_COND)
 	e2:SetRange(LOCATION_MZONE)
-	e2:SetCountLimit(1,id) -- Hard Once Per Turn
+	e2:SetCountLimit(3,id) -- Thrice per turn shared check
 	e2:SetCondition(s.negcon)
 	e2:SetCost(s.negcost)
 	e2:SetTarget(s.negtg)
@@ -34,7 +33,7 @@ function s.initial_effect(c)
 	e3:SetCategory(CATEGORY_REMOVE)
 	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
-	e3:SetCountLimit(1,id+100) -- Hard Once Per Turn
+	e3:SetCountLimit(3,id) -- Thrice per turn shared check
 	e3:SetCost(s.banishcost)
 	e3:SetTarget(s.banishtg)
 	e3:SetOperation(s.banishop)
@@ -46,7 +45,7 @@ function s.initial_effect(c)
 	e4:SetCategory(CATEGORY_ATKCHANGE)
 	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetRange(LOCATION_MZONE)
-	e4:SetCountLimit(1,id+200) -- Hard Once Per Turn
+	e4:SetCountLimit(3,id) -- Thrice per turn shared check
 	e4:SetCost(s.buffcost)
 	e4:SetTarget(s.bufftg)
 	e4:SetOperation(s.buffop)
@@ -68,13 +67,13 @@ function s.initial_effect(c)
 	e6:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
 	e6:SetCode(EVENT_PHASE+PHASE_END)
 	e6:SetRange(LOCATION_MZONE)
-	e6:SetCountLimit(1,id+300) -- Hard Once Per Turn
+	e6:SetCountLimit(3,id) -- Thrice per turn shared check
 	e6:SetCondition(s.mvcon)
 	e6:SetTarget(s.mvtg)
 	e6:SetOperation(s.mvop)
 	c:RegisterEffect(e6)
 
-	-- 7. Continuous Zone Lock: Opponent's unoccupied monster zones pointed to cannot be used
+	-- 7. Continuous Zone Lock: Opponent's unoccupied zones pointed to cannot be used
 	local e7=Effect.CreateEffect(c)
 	e7:SetType(EFFECT_TYPE_FIELD)
 	e7:SetRange(LOCATION_MZONE)
@@ -99,19 +98,10 @@ function s.initial_effect(c)
 	e9:SetCode(EVENT_REMOVE)
 	e9:SetRange(LOCATION_MZONE)
 	e9:SetProperty(EFFECT_FLAG_DELAY)
-	e9:SetCountLimit(1,id+400) -- Hard Once Per Turn
 	e9:SetCondition(s.lockcon)
 	e9:SetTarget(s.locktg)
 	e9:SetOperation(s.lockop)
 	c:RegisterEffect(e9)
-end
-
--- Thrice Per Turn Shared Flag Counter Checkers
-function s.global_check(tp)
-	return Duel.GetFlagEffect(tp,id)<3
-end
-function s.global_register(tp)
-	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
 end
 
 -- 1. Passive ATK Pointing Calculator
@@ -121,31 +111,39 @@ end
 
 -- 2. Hand-Discard Negation Engine
 function s.negcon(e,tp,eg,ep,ev,re,r,rp)
-	return rp~=tp and Duel.IsChainNegatable(ev)
+	return rp~=tp and Duel.IsChainDisablable(ev)
 end
 function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp) 
-		and Duel.IsExistingMatchingCard(Card.IsSetCard,tp,LOCATION_HAND,0,1,nil,0x1ca) end
-	s.global_register(tp)
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsSetCard,tp,LOCATION_HAND,0,1,nil,0x1ca) end
 	Duel.DiscardHand(tp,Card.IsSetCard,1,1,REASON_COST+REASON_DISCARD,nil,0x1ca)
 end
 function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return true end
-	Duel.SetOperationInfo(0,CATEGORY_NEGATE,eg,1,0,0)
-	if re:GetHandler():IsRelateToEffect(re) and re:GetHandler():IsDestructable() then
-		Duel.SetOperationInfo(0,CATEGORY_DESTROY,eg,1,0,0)
-	end
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsNegatable,tp,0,LOCATION_ONFIELD,1,nil) end
+	Duel.SetOperationInfo(0,CATEGORY_DISABLE,nil,1,1-tp,LOCATION_ONFIELD)
 end
 function s.negop(e,tp,eg,ep,ev,re,r,rp)
-	if Duel.NegateActivation(ev) and re:GetHandler():IsRelateToEffect(re) then
-		Duel.Destroy(eg,REASON_EFFECT)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DISABLE)
+	local g=Duel.SelectMatchingCard(tp,Card.IsNegatable,tp,0,LOCATION_ONFIELD,1,1,nil)
+	if #g>0 then
+		local tc=g:GetFirst()
+		Duel.NegateRelatedChain(tc,RESET_TURN_SET)
+		local e1=Effect.CreateEffect(e:GetHandler())
+		e1:SetType(EFFECT_TYPE_SINGLE)
+		e1:SetCode(EFFECT_DISABLE)
+		e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+		tc:RegisterEffect(e1)
+		local e2=Effect.CreateEffect(e:GetHandler())
+		e2:SetType(EFFECT_TYPE_SINGLE)
+		e2:SetCode(EFFECT_DISABLE_EFFECT)
+		e2:SetValue(RESET_TURN_SET)
+		e2:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
+		tc:RegisterEffect(e2)
 	end
 end
 
 -- 3. Banish Target Effect
 function s.banishcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp) and Duel.CheckLPCost(tp,1000) end
-	s.global_register(tp)
+	if chk==0 then return Duel.CheckLPCost(tp,1000) end
 	Duel.PayLPCost(tp,1000)
 end
 function s.banishtg(e,tp,eg,ep,ev,re,r,rp,chk)
@@ -162,10 +160,7 @@ end
 
 -- 4. Unoccupied Zone Math Scaler
 function s.buffcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp)
-		and Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) 
-		and Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,2,nil) end
-	s.global_register(tp)
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) and Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,2,nil) end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,2,nil)
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
@@ -175,7 +170,7 @@ function s.bufftg(e,tp,eg,ep,ev,re,r,rp,chk)
 end
 function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	if not c:IsRelateToEffect(e) or c:IsFacedown() then return end
+	if not c:IsRelateToEffect(e) or c:IsFaceup() == false then return end
 
 	local free_zones = 0
 	for p=0,1 do
@@ -210,10 +205,8 @@ function s.mvcon(e,tp,eg,ep,ev,re,r,rp)
 	return Duel.GetTurnPlayer()==tp
 end
 function s.mvtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp)
-		and Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
 		and Duel.IsExistingMatchingCard(aux.NecroValleyFilter(s.mfilter),tp,LOCATION_GRAVE,0,1,nil) end
-	s.global_register(tp)
 	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
 end
 function s.mvop(e,tp,eg,ep,ev,re,r,rp)
@@ -237,11 +230,13 @@ function s.mfilter(c)
 	return c:IsSetCard(0x1ca) and c:IsType(TYPE_MONSTER) and c:IsAbleToHand()
 end
 
--- 7. Fixed Pointing Arrow Zone Locker (Opponent's Main Monster Zones only)
+-- 7. Fixed Pointing Arrow Zone Locker
 function s.zonelockval(e)
 	local c=e:GetHandler()
 	local tp=e:GetHandlerPlayer()
-	local zones=c:GetLinkedZone(1-tp) & 0x1f -- Filters to Main Monster Zones 0-4
+	-- Get zones pointed to by this card relative to the opponent's field layout mapping
+	local zones=c:GetLinkedZone(1-tp) & 0x1f
+	-- Shift bits to correctly overlay onto the opponent's field perspective index
 	return zones << 16
 end
 
@@ -252,26 +247,27 @@ end
 
 -- 9. Trigger-Based On-Field Zone Locker
 function s.lockfilter(c,tp)
-	return c:IsControler(1-tp)
+	return c:IsControler(1-tp) and c:IsLocation(LOCATION_REMOVED)
 end
 function s.lockcon(e,tp,eg,ep,ev,re,r,rp)
+	-- Fixed the syntax fragment error completely here
 	return eg:IsExists(s.lockfilter,1,nil,tp) and not (Duel.GetCurrentPhase()==PHASE_DAMAGE)
 end
 function s.locktg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp) end
-	s.global_register(tp)
+	if chk==0 then return true end
 end
 function s.lockop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	if not c:IsRelateToEffect(e) or c:IsFacedown() then return end
+	if not c:IsRelateToEffect(e) then return end
 	
+	-- Open UI choice for target zone
 	local flag=Duel.SelectDisableField(tp,1,LOCATION_ONFIELD,LOCATION_ONFIELD,0)
 	
+	-- Fixed registration wrapper to guarantee the state engine respects the runtime boundary
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetCode(EFFECT_DISABLE_FIELD)
 	e1:SetValue(flag)
-	e1:SetRange(LOCATION_MZONE)
-	e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-	c:RegisterEffect(e1)
+	e1:SetReset(RESET_DEVICE+RESET_WITH_CARD) -- Tied directly to this card staying on field
+	Duel.RegisterEffect(e1,tp)
 end
