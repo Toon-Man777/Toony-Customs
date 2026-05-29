@@ -4,7 +4,7 @@ function s.initial_effect(c)
 	c:EnableReviveLimit()
 	Link.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,0x1ca),2,99)
 
-	-- 1. Continuous: Gains 500 ATK for each "R.B." monster pointed to
+	-- 1. Continuous: Gains 300 ATK for each "R.B." monster pointed to (UPDATED TO 300)
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_SINGLE)
 	e1:SetCode(EFFECT_UPDATE_ATTACK)
@@ -13,15 +13,15 @@ function s.initial_effect(c)
 	e1:SetValue(s.atkval)
 	c:RegisterEffect(e1)
 
-	-- 2. Quick Effect: Discard 1 "R.B." to Negate Activation & Destroy (FIXED FLAGS)
+	-- 2. Quick Effect: Discard 1 "R.B." to Negate Activation & Destroy
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,0))
 	e2:SetCategory(CATEGORY_NEGATE+CATEGORY_DESTROY)
 	e2:SetType(EFFECT_TYPE_QUICK_O)
 	e2:SetCode(EVENT_CHAINING)
-	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_CAL) -- Corrected core engine flags
+	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_CAL)
 	e2:SetRange(LOCATION_MZONE)
-	e2:SetCountLimit(1,id) -- Hard Once Per Turn per effect activation
+	e2:SetCountLimit(1,id)
 	e2:SetCondition(s.negcon)
 	e2:SetCost(s.negcost)
 	e2:SetTarget(s.negtg)
@@ -35,30 +35,33 @@ function s.initial_effect(c)
 	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetCountLimit(1,id+100)
+	e3:SetCondition(s.poolcon)
 	e3:SetCost(s.banishcost)
 	e3:SetTarget(s.banishtg)
 	e3:SetOperation(s.banishop)
 	c:RegisterEffect(e3)
 
-	-- 4. Ignition Effect: Banish 2 Spells/Traps from GY to buff ATK & Attack twice
+	-- 4. Ignition Effect: Banish 2 Spells/Traps from GY to buff ATK & Attack twice (UPDATED TO 300)
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,2))
 	e4:SetCategory(CATEGORY_ATKCHANGE)
 	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCountLimit(1,id+200)
+	e4:SetCondition(s.poolcon)
 	e4:SetCost(s.buffcost)
 	e4:SetTarget(s.bufftg)
 	e4:SetOperation(s.buffop)
 	c:RegisterEffect(e4)
 
-	-- 5. Continuous: Opponent takes half the battle damage involving this card
+	-- 5. Continuous: Opponent takes half the battle damage involving this card (FIXED MECHANIC)
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_FIELD)
 	e5:SetCode(EFFECT_CHANGE_BATTLE_DAMAGE)
 	e5:SetRange(LOCATION_MZONE)
 	e5:SetTargetRange(0,1)
-	e5:SetValue(aux.ChangeBattleDamage(1,HALF_DAMAGE))
+	e5:SetTarget(s.damtg)
+	e5:SetValue(s.damval)
 	c:RegisterEffect(e5)
 
 	-- 6. Trigger Effect: End Phase move self and add 1 "R.B." monster from GY
@@ -106,31 +109,33 @@ function s.initial_effect(c)
 	c:RegisterEffect(e9)
 end
 
--- Shared Safe Global Pool Counter (Ensures max 3 activations across all effects)
+-- Shared Safe Global Pool Counter Conditions
 function s.global_check(tp)
 	return Duel.GetFlagEffect(tp,id)<3
 end
 function s.global_register(tp)
 	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
 end
+function s.poolcon(e,tp,eg,ep,ev,re,r,rp)
+	return s.global_check(tp)
+end
 
--- 1. Passive ATK Pointing Calculator
+-- 1. Passive ATK Pointing Calculator (300 ATK Per Monster)
 function s.atkval(e,c)
-	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*500
+	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*300
 end
 
 -- 2. Hand-Discard Negation Engine
 function s.negcon(e,tp,eg,ep,ev,re,r,rp)
-	return rp~=tp and Duel.IsChainNegatable(ev)
+	return rp~=tp and Duel.IsChainNegatable(ev) and s.global_check(tp)
 end
 function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp)
-		and Duel.IsExistingMatchingCard(Card.IsSetCard,tp,LOCATION_HAND,0,1,nil,0x1ca) end
-	s.global_register(tp)
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsSetCard,tp,LOCATION_HAND,0,1,nil,0x1ca) end
 	Duel.DiscardHand(tp,Card.IsSetCard,1,1,REASON_COST+REASON_DISCARD,nil,0x1ca)
 end
 function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
+	s.global_register(tp)
 	Duel.SetOperationInfo(0,CATEGORY_NEGATE,eg,1,0,0)
 	if re:GetHandler():IsRelateToEffect(re) and re:GetHandler():IsDestructable() then
 		Duel.SetOperationInfo(0,CATEGORY_DESTROY,eg,1,0,0)
@@ -144,12 +149,12 @@ end
 
 -- 3. Banish Target Effect
 function s.banishcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp) and Duel.CheckLPCost(tp,1000) end
-	s.global_register(tp)
+	if chk==0 then return Duel.CheckLPCost(tp,1000) end
 	Duel.PayLPCost(tp,1000)
 end
 function s.banishtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil) end
+	s.global_register(tp)
 	Duel.SetOperationInfo(0,CATEGORY_REMOVE,nil,1,0,LOCATION_ONFIELD)
 end
 function s.banishop(e,tp,eg,ep,ev,re,r,rp)
@@ -160,18 +165,17 @@ function s.banishop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 4. Unoccupied Zone Math Scaler
+-- 4. Unoccupied Zone Math Scaler (300 ATK Per Zone)
 function s.buffcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp)
-		and Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) 
+	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) 
 		and Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,2,nil) end
-	s.global_register(tp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,2,nil)
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
 end
 function s.bufftg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
+	s.global_register(tp)
 end
 function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
@@ -192,7 +196,7 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetCode(EFFECT_UPDATE_ATTACK)
-		e1:SetValue(free_zones * 500)
+		e1:SetValue(free_zones * 300)
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD_DISABLE+RESET_PHASE+PHASE_END)
 		c:RegisterEffect(e1)
 	end
@@ -205,13 +209,20 @@ function s.buffop(e,tp,eg,ep,ev,re,r,rp)
 	c:RegisterEffect(e2)
 end
 
+-- 5. Half Battle Damage Core Engine Verification Filters
+function s.damtg(e,c)
+	return c==e:GetHandler()
+end
+function s.damval(e,re,val)
+	return math.floor(val/2)
+end
+
 -- 6. End Phase Move and Recycle
 function s.mvcon(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.GetTurnPlayer()==tp
+	return Duel.GetTurnPlayer()==tp and s.global_check(tp)
 end
 function s.mvtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp)
-		and Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
 		and Duel.IsExistingMatchingCard(aux.NecroValleyFilter(s.mfilter),tp,LOCATION_GRAVE,0,1,nil) end
 	s.global_register(tp)
 	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
@@ -241,7 +252,7 @@ end
 function s.zonelockval(e)
 	local c=e:GetHandler()
 	local tp=e:GetHandlerPlayer()
-	local zones=c:GetLinkedZone(1-tp) & 0x1f -- Correctly maps zones 0-4 from opponent's side
+	local zones=c:GetLinkedZone(1-tp) & 0x1f
 	return zones << 16
 end
 
@@ -255,10 +266,10 @@ function s.lockfilter(c,tp)
 	return c:IsControler(1-tp)
 end
 function s.lockcon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.lockfilter,1,nil,tp) and not (Duel.GetCurrentPhase()==PHASE_DAMAGE)
+	return eg:IsExists(s.lockfilter,1,nil,tp) and not (Duel.GetCurrentPhase()==PHASE_DAMAGE) and s.global_check(tp)
 end
 function s.locktg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_check(tp) end
+	if chk==0 then return true end
 	s.global_register(tp)
 end
 function s.lockop(e,tp,eg,ep,ev,re,r,rp)
