@@ -21,9 +21,9 @@ function s.initial_effect(c)
 	e2:SetCode(EVENT_CHAINING)
 	e2:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_COND)
 	e2:SetRange(LOCATION_MZONE)
-	e2:SetCountLimit(1,id) -- Hard Once Per Turn for this specific effect
+	e2:SetCountLimit(1,id) -- Hard Once Per Turn
 	e2:SetCondition(s.negcon)
-	e2:SetCost(s.global_count_cost) -- Shared thrice per turn pool check
+	e2:SetCost(s.negcost)
 	e2:SetTarget(s.negtg)
 	e2:SetOperation(s.negop)
 	c:RegisterEffect(e2)
@@ -74,7 +74,7 @@ function s.initial_effect(c)
 	e6:SetOperation(s.mvop)
 	c:RegisterEffect(e6)
 
-	-- 7. Continuous Zone Lock: Opponent's unoccupied zones pointed to cannot be used
+	-- 7. Continuous Zone Lock: Opponent's unoccupied monster zones pointed to cannot be used
 	local e7=Effect.CreateEffect(c)
 	e7:SetType(EFFECT_TYPE_FIELD)
 	e7:SetRange(LOCATION_MZONE)
@@ -106,9 +106,11 @@ function s.initial_effect(c)
 	c:RegisterEffect(e9)
 end
 
--- Shared Thrice Per Turn Counter Check Logic
-function s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.GetFlagEffect(tp,id)<3 end
+-- Thrice Per Turn Shared Flag Counter Checkers
+function s.global_check(tp)
+	return Duel.GetFlagEffect(tp,id)<3
+end
+function s.global_register(tp)
 	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
 end
 
@@ -117,14 +119,14 @@ function s.atkval(e,c)
 	return c:GetLinkedGroup():FilterCount(Card.IsSetCard,nil,0x1ca)*500
 end
 
--- 2. Hand-Discard Negation Engine (Updated to track Activations)
+-- 2. Hand-Discard Negation Engine
 function s.negcon(e,tp,eg,ep,ev,re,r,rp)
 	return rp~=tp and Duel.IsChainNegatable(ev)
 end
 function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,0)
+	if chk==0 then return s.global_check(tp) 
 		and Duel.IsExistingMatchingCard(Card.IsSetCard,tp,LOCATION_HAND,0,1,nil,0x1ca) end
-	s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,1)
+	s.global_register(tp)
 	Duel.DiscardHand(tp,Card.IsSetCard,1,1,REASON_COST+REASON_DISCARD,nil,0x1ca)
 end
 function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
@@ -142,8 +144,8 @@ end
 
 -- 3. Banish Target Effect
 function s.banishcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,0) and Duel.CheckLPCost(tp,1000) end
-	s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,1)
+	if chk==0 then return s.global_check(tp) and Duel.CheckLPCost(tp,1000) end
+	s.global_register(tp)
 	Duel.PayLPCost(tp,1000)
 end
 function s.banishtg(e,tp,eg,ep,ev,re,r,rp,chk)
@@ -160,10 +162,10 @@ end
 
 -- 4. Unoccupied Zone Math Scaler
 function s.buffcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,0)
+	if chk==0 then return s.global_check(tp)
 		and Duel.IsExistingMatchingCard(Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,nil) 
 		and Duel.IsExistingMatchingCard(Card.IsAbleToRemoveAsCost,tp,LOCATION_GRAVE,0,2,nil) end
-	s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,1)
+	s.global_register(tp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,Card.IsSpellTrap,tp,LOCATION_GRAVE,0,2,2,nil)
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
@@ -208,10 +210,10 @@ function s.mvcon(e,tp,eg,ep,ev,re,r,rp)
 	return Duel.GetTurnPlayer()==tp
 end
 function s.mvtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,0)
+	if chk==0 then return s.global_check(tp)
 		and Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
 		and Duel.IsExistingMatchingCard(aux.NecroValleyFilter(s.mfilter),tp,LOCATION_GRAVE,0,1,nil) end
-	s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,1)
+	s.global_register(tp)
 	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
 end
 function s.mvop(e,tp,eg,ep,ev,re,r,rp)
@@ -235,11 +237,11 @@ function s.mfilter(c)
 	return c:IsSetCard(0x1ca) and c:IsType(TYPE_MONSTER) and c:IsAbleToHand()
 end
 
--- 7. Fixed Pointing Arrow Zone Locker
+-- 7. Fixed Pointing Arrow Zone Locker (Opponent's Main Monster Zones only)
 function s.zonelockval(e)
 	local c=e:GetHandler()
 	local tp=e:GetHandlerPlayer()
-	local zones=c:GetLinkedZone(1-tp) & 0x1f
+	local zones=c:GetLinkedZone(1-tp) & 0x1f -- Filters to Main Monster Zones 0-4
 	return zones << 16
 end
 
@@ -256,17 +258,15 @@ function s.lockcon(e,tp,eg,ep,ev,re,r,rp)
 	return eg:IsExists(s.lockfilter,1,nil,tp) and not (Duel.GetCurrentPhase()==PHASE_DAMAGE)
 end
 function s.locktg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,0) end
-	s.global_count_cost(e,tp,eg,ep,ev,re,r,rp,1)
+	if chk==0 then return s.global_check(tp) end
+	s.global_register(tp)
 end
 function s.lockop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if not c:IsRelateToEffect(e) or c:IsFacedown() then return end
 	
-	-- Open an on-screen prompt selection box for the player to select any legal empty zone
 	local flag=Duel.SelectDisableField(tp,1,LOCATION_ONFIELD,LOCATION_ONFIELD,0)
 	
-	-- Create a field modifier tracking rule attached completely to this card staying on field
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetCode(EFFECT_DISABLE_FIELD)
