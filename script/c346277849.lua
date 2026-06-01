@@ -4,7 +4,7 @@ function s.initial_effect(c)
 	c:EnableReviveLimit()
 	Synchro.AddProcedure(c,s.tunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
 
-	-- 1. Custom Summon Rule: You can treat 1 "Meklord Emperor Wisel" you control as a Tuner
+	-- 1. Custom Summon Rule: Treat 1 "Meklord Emperor Wisel" you control as a Tuner
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
@@ -36,11 +36,13 @@ function s.initial_effect(c)
 	c:RegisterEffect(e3)
 
 	-- 4. Continuous Effect: Can make up to 2 attacks on monsters during each Battle Phase
+	-- (Fixed the broken EFFECT_MONSTER_NOTARGET_BATTLE engine crash here)
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_SINGLE)
-	e4:SetCode(EFFECT_MONSTER_NOTARGET_BATTLE)
+	e4:SetCode(EFFECT_ATTACK_MONSTER_ONLY)
 	e4:SetValue(1)
 	c:RegisterEffect(e4)
+	
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_SINGLE)
 	e5:SetCode(EFFECT_EXTRA_ATTACK_MONSTER)
@@ -62,7 +64,7 @@ function s.initial_effect(c)
 	c:RegisterEffect(e6)
 end
 
-s.listed_names={68140974}
+s.listed_names={68140974} -- Meklord Emperor Wisel
 
 function s.tunerfilter(c,scard,sumtype,tp)
 	return c:IsCode(68140974) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
@@ -113,7 +115,7 @@ function s.atkfilter(c,ec)
 end
 function s.atkval(e,c)
 	local atk=0
-	local g=Duel.GetMatchingCardGroup(s.atkfilter,e:GetHandlerPlayer(),LOCATION_SZONE,0,nil,c)
+	local g=Duel.GetMatchingGroup(s.atkfilter,e:GetHandlerPlayer(),LOCATION_SZONE,0,nil,c)
 	for tc in aux.Next(g) do
 		local catk=tc:GetTextAttack()
 		if catk<0 then catk=0 end

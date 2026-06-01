@@ -1,6 +1,6 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Disable natural Synchro Summoning by forcing the check to always fail
+	-- Disable natural Synchro Summoning
 	c:EnableReviveLimit()
 	Synchro.AddProcedure(c,nil,0,0,nil,0,0,function() return false end)
 
@@ -40,9 +40,8 @@ function s.initial_effect(c)
 	c:RegisterEffect(e4)
 end
 
-s.listed_series={0x13, 0x3013} -- Meklord, Meklord Emperor
+s.listed_series={0x13, 0x3013}
 
--- Summoning Condition Filters
 function s.empfilter(c)
 	return c:IsFaceup() and c:IsSetCard(0x3013)
 end
@@ -52,13 +51,14 @@ end
 function s.sprcon(e,c)
 	if c==nil then return true end
 	local tp=c:GetControler()
-	local rg=Duel.GetMatchingCardGroup(s.sprfilter,tp,LOCATION_MZONE+LOCATION_GRAVE,0,nil)
+	-- Using universal Group selection logic compatible with all repo variations
+	local rg=Duel.GetMatchingGroup(s.sprfilter,tp,LOCATION_MZONE+LOCATION_GRAVE,0,nil)
 	return Duel.GetLocationCountFromEx(tp,tp,rg,c)>0
 		and Duel.IsExistingMatchingCard(s.empfilter,tp,LOCATION_MZONE,0,1,nil)
 		and aux.SelectUnselectGroup(rg,e,tp,3,3,aux.ChkfMMZ(1),0)
 end
 function s.sprtg(e,tp,eg,ep,ev,re,r,rp,chk,c)
-	local rg=Duel.GetMatchingCardGroup(s.sprfilter,tp,LOCATION_MZONE+LOCATION_GRAVE,0,nil)
+	local rg=Duel.GetMatchingGroup(s.sprfilter,tp,LOCATION_MZONE+LOCATION_GRAVE,0,nil)
 	local g=aux.SelectUnselectGroup(rg,e,tp,3,3,aux.ChkfMMZ(1),1,tp,HINT_SELECTMSG,HINTMSG_REMOVE,nil,nil,true)
 	if #g>0 then
 		g:KeepAlive()
@@ -74,7 +74,6 @@ function s.sprop(e,tp,eg,ep,ev,re,r,rp,c)
 	g:DeleteWithCell()
 end
 
--- 1. Monster Effect Immunity Logic
 function s.etarget(e,c)
 	return c:IsSetCard(0x13)
 end
@@ -82,7 +81,6 @@ function s.efilter(e,re)
 	return re:IsActiveType(TYPE_MONSTER) and re:GetOwnerPlayer()~=e:GetHandlerPlayer() and re:IsActivated()
 end
 
--- 2. Extra Deck Peeking & Equip/Board Wipe Logic
 function s.quickcon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():GetFlagEffect(id)==0
 end
@@ -110,7 +108,7 @@ function s.quickop(e,tp,eg,ep,ev,re,r,rp)
 	
 	if Duel.GetLocationCount(tp,LOCATION_SZONE)<=0 then return end
 	
-	local ex_g=Duel.GetMatchingCardGroup(s.exsyncreq,tp,LOCATION_EXTRA,LOCATION_EXTRA,nil)
+	local ex_g=Duel.GetMatchingGroup(s.exsyncreq,tp,LOCATION_EXTRA,LOCATION_EXTRA,nil)
 	if #ex_g==0 then return end
 	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_FACEUP)
@@ -139,7 +137,7 @@ function s.quickop(e,tp,eg,ep,ev,re,r,rp)
 		
 		Duel.BreakEffect()
 		
-		local des_g=Duel.GetMatchingCardGroup(s.desfilter,tp,0,LOCATION_MZONE,nil,eq_atk)
+		local des_g=Duel.GetMatchingGroup(s.desfilter,tp,0,LOCATION_MZONE,nil,eq_atk)
 		if #des_g>0 then
 			Duel.Destroy(des_g,REASON_EFFECT)
 		end
