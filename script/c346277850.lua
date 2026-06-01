@@ -25,7 +25,6 @@ function s.initial_effect(c)
 	e2:SetTarget(s.eqtg)
 	e2:SetOperation(s.eqop)
 	c:RegisterEffect(e2)
-	aux.AddEReferChanged(c)
 
 	-- 3. Continuous Effect: Gains ATK/DEF equal to half your LP
 	local e3=Effect.CreateEffect(c)
@@ -68,23 +67,18 @@ end
 
 s.listed_names={4545683}
 
--- Material filters
 function s.tunerfilter(c,scard,sumtype,tp)
 	return c:IsCode(4545683) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
 end
 function s.customtunerfilter(c,scard,sumtype,tp)
 	return c:IsCode(4545683) and c:IsFaceup()
 end
-
--- 1. Custom Synchro Material Logic
 function s.synctg(e,tg,ntg,sg,lv,sc,tp)
 	return Synchro.ConditionMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
 end
 function s.syncop(e,tp,eg,ep,ev,re,r,rp,tg,ntg,sg,lv,sc)
 	return Synchro.OperationMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
 end
-
--- 2. Equip Logic
 function s.eqfilter(c)
 	return c:IsFaceup() and c:IsSummonType(SUMMON_TYPE_SPECIAL) and c:IsSummonLocation(LOCATION_EXTRA) and c:IsAbleToChangeControler()
 end
@@ -117,13 +111,9 @@ end
 function s.eqlimit(e,c)
 	return e:GetOwner()==c
 end
-
--- 3. Half LP Gain calculation
 function s.lpval(e,c)
 	return math.floor(Duel.GetLP(e:GetHandlerPlayer())/2)
 end
-
--- 4. Equipped Monster ATK Gain calculation
 function s.atkfilter(c,ec)
 	return c:GetEquipTarget()==ec
 end
@@ -136,7 +126,7 @@ function s.eqatkval(e,c)
 		atk=atk+catk
 	end
 	return atk
--- 6. Special Summon Equipped Monster Logic
+end
 function s.spfilter(c,e,tp,ec)
 	return c:GetEquipTarget()==ec and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end

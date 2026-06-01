@@ -37,7 +37,7 @@ end
 
 -- 1. ATK Boost Calculation
 function s.atkfilter(c)
-	return c:IsFaceup() and c:IsSetCard(0x13) and c:IsType(TYPE_MONSTER) -- 0x13 = "Meklord"
+	return c:IsFaceup() and c:IsSetCard(0x6013) and c:IsType(TYPE_MONSTER) -- 0x13 = "Meklord"
 end
 function s.atkval(e,c)
 	return Duel.GetMatchingCardCount(s.atkfilter,e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)*300

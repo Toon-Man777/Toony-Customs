@@ -33,7 +33,7 @@ function s.initial_effect(c)
 	e3:SetTarget(s.eqtg)
 	e3:SetOperation(s.eqop)
 	c:RegisterEffect(e3)
-	aux.AddEReferChanged(c)
+	--aux.AddEReferChanged(c)
 
 	-- Ignition: Send 1 equipped card to GY; add 1 Spell/Trap that lists "Meklord"
 	local e4=Effect.CreateEffect(c)

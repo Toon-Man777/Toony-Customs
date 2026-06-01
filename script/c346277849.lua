@@ -25,7 +25,6 @@ function s.initial_effect(c)
 	e2:SetTarget(s.eqtg)
 	e2:SetOperation(s.eqop)
 	c:RegisterEffect(e2)
-	aux.AddEReferChanged(c)
 
 	-- 3. Continuous Effect: Gains ATK equal to the combined ATK of monsters equipped by its own effect
 	local e3=Effect.CreateEffect(c)
@@ -39,13 +38,13 @@ function s.initial_effect(c)
 	-- 4. Continuous Effect: Can make up to 2 attacks on monsters during each Battle Phase
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_SINGLE)
-	e4:SetCode(EFFECT_MONSTER_NOTARGET_BATTLE) -- Restricts multiple attacks to only monsters
+	e4:SetCode(EFFECT_MONSTER_NOTARGET_BATTLE)
 	e4:SetValue(1)
 	c:RegisterEffect(e4)
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_SINGLE)
 	e5:SetCode(EFFECT_EXTRA_ATTACK_MONSTER)
-	e5:SetValue(1) -- Base 1 + Extra 1 = 2 attacks total
+	e5:SetValue(1)
 	c:RegisterEffect(e5)
 
 	-- 5. Quick Effect: Once per turn, negate a Spell activation and destroy it
@@ -65,24 +64,18 @@ end
 
 s.listed_names={68140974}
 
--- Standard Material Filter
 function s.tunerfilter(c,scard,sumtype,tp)
 	return c:IsCode(68140974) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
 end
-
--- 1. Custom Synchro Material Logic (Treating Wisel as a Tuner)
 function s.customtunerfilter(c,scard,sumtype,tp)
 	return c:IsCode(68140974) and c:IsFaceup()
 end
 function s.synctg(e,tg,ntg,sg,lv,sc,tp)
-	local res=Synchro.ConditionMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
-	return res
+	return Synchro.ConditionMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
 end
 function s.syncop(e,tp,eg,ep,ev,re,r,rp,tg,ntg,sg,lv,sc)
 	return Synchro.OperationMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
 end
-
--- 2. Equip Logic
 function s.eqfilter(c)
 	return c:IsFaceup() and c:IsSummonType(SUMMON_TYPE_SPECIAL) and c:IsSummonLocation(LOCATION_EXTRA) and c:IsAbleToChangeControler()
 end
@@ -100,7 +93,6 @@ function s.eqop(e,tp,eg,ep,ev,re,r,rp)
 	if tc and tc:IsRelateToEffect(e) and tc:IsFaceup() then
 		if c:IsFaceup() and c:IsRelateToEffect(e) then
 			if not Duel.Equip(tp,tc,c) then return end
-			-- Add Equip Limit
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_SINGLE)
 			e1:SetProperty(EFFECT_FLAG_COPY_INHERIT+EFFECT_FLAG_OWNER_RELATE)
@@ -116,8 +108,6 @@ end
 function s.eqlimit(e,c)
 	return e:GetOwner()==c
 end
-
--- 3. Dynamic ATK Boost Calculation
 function s.atkfilter(c,ec)
 	return c:GetEquipTarget()==ec
 end
@@ -131,8 +121,6 @@ function s.atkval(e,c)
 	end
 	return atk
 end
-
--- 5. Spell Negation Logic
 function s.negcon(e,tp,eg,ep,ev,re,r,rp)
 	return re:IsActiveType(TYPE_SPELL) and Duel.IsChainNegatable(ev)
 end
