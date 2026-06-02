@@ -2,7 +2,7 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Link Summon: 2 "Meklord" Monsters
 	c:EnableReviveLimit()
-	Link.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,0x13),2,2) -- Corrected to 0x13
+	Link.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,0x6013),2,2) -- Corrected to 0x13
 
 	-- 1. Ignition Effect: Special Summon 2 "Meklord Army" monsters from Deck to pointed zones
 	local e1=Effect.CreateEffect(c)
