@@ -36,11 +36,10 @@ function s.initial_effect(c)
 	c:RegisterEffect(e3)
 
 	-- 4. Continuous Effect: Can make up to 2 attacks on monsters during each Battle Phase
-	-- (Fixed the broken EFFECT_MONSTER_NOTARGET_BATTLE engine crash here)
+	-- (Completely replaced the broken engine constants with standard direct attack restriction)
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_SINGLE)
-	e4:SetCode(EFFECT_ATTACK_MONSTER_ONLY)
-	e4:SetValue(1)
+	e4:SetCode(EFFECT_CANNOT_DIRECT_ATTACK)
 	c:RegisterEffect(e4)
 	
 	local e5=Effect.CreateEffect(c)
