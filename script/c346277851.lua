@@ -75,7 +75,7 @@ function s.spop(e,tp,eg,ep,ev,re,r,rp,c)
 	local g=e:GetLabelObject()
 	if not g then return end
 	Duel.Remove(g,POS_FACEUP,REASON_COST)
-	g:DeleteLeaveEvent()
+	g:DeleteGroup()
 end
 
 -- 1. Unaffected by Opponent Activated Monster Effects Filter

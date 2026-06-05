@@ -30,7 +30,7 @@ function s.initial_effect(c)
 	-- Can make up to 2 attacks on monsters during each Battle Phase
 	local e3=Effect.CreateEffect(c)
 	e3:SetType(EFFECT_TYPE_SINGLE)
-	e3:SetCode(EFFECT_攻击_MONSTER) -- Internal engine code allowance flag for multi-monster attacks
+	e3:SetCode(EFFECT_ATTACK_MONSTER) -- Internal engine code allowance flag for multi-monster attacks
 	e3:SetValue(2)
 	c:RegisterEffect(e3)
 
