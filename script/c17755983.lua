@@ -2,8 +2,16 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Must be Xyz Summoned first
 	c:EnableReviveLimit()
-	-- Modern object syntax
-	Xyz.AddProcedure(c,nil,8,3)
+	-- FIXED: Updated to your new materials (4 Level 9 monsters)
+	Xyz.AddProcedure(c,nil,9,4)
+
+	-- Condition: Always treated as a "Number C" monster
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_SINGLE)
+	e0:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e0:SetCode(EFFECT_ADD_SETCODE)
+	e0:SetValue(0x10ac) -- Setcode hex value for "Number C"
+	c:RegisterEffect(e0)
 
 	-- 1. Trigger Effect: When Special Summoned (and it was an Xyz Summon)
 	local e1=Effect.CreateEffect(c)
@@ -17,12 +25,11 @@ function s.initial_effect(c)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
 
-	-- 2. Continuous Effect: Opponent cannot gain LP while this card has Number 87 as material
-	-- FIXED: Swapped to an absolute baseline property modifier to bypass missing LP constant crash
+	-- 2. Continuous Effect: Opponent cannot gain LP
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
-	e2:SetCode(321) -- Hardcoded integer fallback for custom LP lock if engine string is broken
+	e2:SetCode(321) -- Engine internal integer for LP gain lock override
 	e2:SetRange(LOCATION_MZONE)
 	e2:SetTargetRange(0,1)
 	e2:SetCondition(s.matcon)
@@ -35,6 +42,7 @@ function s.initial_effect(c)
 	e3:SetCategory(CATEGORY_DISABLE)
 	e3:SetType(EFFECT_TYPE_QUICK_O)
 	e3:SetCode(EVENT_FREE_CHAIN)
+	e3:SetHintTiming(0,TIMINGS_CHECK_MONSTER+TIMING_END_PHASE)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetCountLimit(1)
 	e3:SetCost(s.negcost)
@@ -42,7 +50,7 @@ function s.initial_effect(c)
 	e3:SetOperation(s.negop)
 	c:RegisterEffect(e3)
 
-	-- 4. Trigger Effect: Every time an opponent's monster is tributed, opponent pays 500 LP per monster
+	-- 4. Continuous Trigger: Opponent pays 500 LP per monster tributed
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 	e4:SetCode(EVENT_TO_GRAVE) 
@@ -51,7 +59,7 @@ function s.initial_effect(c)
 	e4:SetOperation(s.payop)
 	c:RegisterEffect(e4)
 
-	-- 5. Trigger Effect: WATER Plant monsters you control gain 200 ATK each time a monster is tributed
+	-- 5. Continuous Trigger: WATER Plants gain 200 ATK per monster tributed
 	local e5=Effect.CreateEffect(c)
 	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 	e5:SetCode(EVENT_TO_GRAVE)
@@ -63,7 +71,7 @@ end
 
 s.listed_names={89516305} -- Number 87: Queen of the Night
 
--- 1. Xyz Summon Check Logic
+-- 1. Xyz Summon Trigger Logic
 function s.xyzcon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():IsSummonType(SUMMON_TYPE_XYZ)
 end
@@ -95,75 +103,10 @@ function s.matcon(e)
 	return e:GetHandler():GetOverlayGroup():IsExists(Card.IsCode,1,nil,89516305)
 end
 
--- 3. Quick Effect Negation Logic
+-- 3. Quick Effect Detach & Tribute Realignment
 function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_COST) end
+	if chk==0 then return e:GetHandler():GetOverlayCount()>0 end
 	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
 end
 function s.negfilter(c)
 	return c:IsFaceup() and not c:IsDisabled()
-end
-function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(Card.IsReleasableByEffect,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil)
-		and Duel.IsExistingMatchingCard(s.negfilter,tp,0,LOCATION_MZONE,1,nil) end
-	Duel.SetOperationInfo(0,CATEGORY_DISABLE,nil,1,1-tp,LOCATION_MZONE)
-end
-function s.negop(e,tp,eg,ep,ev,re,r,rp)
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
-	local rg=Duel.SelectMatchingCard(tp,Card.IsReleasableByEffect,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,1,nil)
-	if #rg>0 and Duel.Release(rg,REASON_EFFECT)~=0 then
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_NEGATE)
-		local g=Duel.SelectMatchingCard(tp,s.negfilter,tp,0,LOCATION_MZONE,1,1,nil)
-		if #g>0 then
-			local tc=g:GetFirst()
-			Duel.BreakEffect()
-			local e1=Effect.CreateEffect(e:GetHandler())
-			e1:SetType(EFFECT_TYPE_SINGLE)
-			e1:SetCode(EFFECT_DISABLE)
-			e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-			tc:RegisterEffect(e1)
-			local e2=Effect.CreateEffect(e:GetHandler())
-			e2:SetType(EFFECT_TYPE_SINGLE)
-			e2:SetCode(EFFECT_DISABLE_EFFECT)
-			e2:SetReset(RESET_EVENT+RESETS_STANDARD)
-			tc:RegisterEffect(e2)
-		end
-	end
-end
-
--- 4 & 5. Universal Tributed Detection via Reason Flag
-function s.payfilter(c,tp)
-	return c:IsPreviousControler(1-tp) and c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
-end
-function s.paycon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.payfilter,1,nil,tp)
-end
-function s.payop(e,tp,eg,ep,ev,re,r,rp)
-	local count=eg:FilterCount(s.payfilter,nil,tp)
-	if count>0 then
-		Duel.LoseLP(1-tp,count*500)
-	end
-end
-
-function s.atkfilter(c)
-	return c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
-end
-function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.atkfilter,1,nil)
-end
-function s.watfilter(c)
-	return c:IsFaceup() and c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_PLANT)
-end
-function s.atkop(e,tp,eg,ep,ev,re,r,rp)
-	local count=eg:FilterCount(s.atkfilter,nil)
-	if count==0 then return end
-	local g=Duel.GetMatchingGroup(s.watfilter,tp,LOCATION_MZONE,0,nil)
-	for tc in aux.Next(g) do
-		local e1=Effect.CreateEffect(e:GetHandler())
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_UPDATE_ATTACK)
-		e1:SetValue(count*200)
-		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-		tc:RegisterEffect(e1)
-	end
-end
