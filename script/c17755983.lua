@@ -2,18 +2,18 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Must be Xyz Summoned first
 	c:EnableReviveLimit()
-	-- FIXED: Updated to your new materials (4 Level 9 monsters)
+	-- 4 Level 9 monsters
 	Xyz.AddProcedure(c,nil,9,4)
 
-	-- Condition: Always treated as a "Number C" monster
+	-- Always treated as a "Number C" monster
 	local e0=Effect.CreateEffect(c)
 	e0:SetType(EFFECT_TYPE_SINGLE)
 	e0:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
 	e0:SetCode(EFFECT_ADD_SETCODE)
-	e0:SetValue(0x10ac) -- Setcode hex value for "Number C"
+	e0:SetValue(0x10ac) -- "Number C" archetype hex code
 	c:RegisterEffect(e0)
 
-	-- 1. Trigger Effect: When Special Summoned (and it was an Xyz Summon)
+	-- 1. Trigger Effect: When Xyz Summoned, Special Summon 1 WATER Plant, then you can Tribute 1 monster
 	local e1=Effect.CreateEffect(c)
 	e1:SetDescription(aux.Stringid(id,0))
 	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
@@ -25,11 +25,11 @@ function s.initial_effect(c)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
 
-	-- 2. Continuous Effect: Opponent cannot gain LP
+	-- 2. Continuous Effect: Opponent cannot gain LP while this card has Number 87 as material
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
-	e2:SetCode(321) -- Engine internal integer for LP gain lock override
+	e2:SetCode(321) -- Hardcoded integer fallback to bypass missing LP constant database crashes
 	e2:SetRange(LOCATION_MZONE)
 	e2:SetTargetRange(0,1)
 	e2:SetCondition(s.matcon)
@@ -103,10 +103,75 @@ function s.matcon(e)
 	return e:GetHandler():GetOverlayGroup():IsExists(Card.IsCode,1,nil,89516305)
 end
 
--- 3. Quick Effect Detach & Tribute Realignment
+-- 3. Quick Effect Detach, Tribute & Negate Loop
 function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return e:GetHandler():GetOverlayCount()>0 end
 	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
 end
 function s.negfilter(c)
 	return c:IsFaceup() and not c:IsDisabled()
+end
+function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.CheckReleaseGroup(tp,nil,1,false,1,true,e:GetHandler(),tp,nil,nil,nil)
+		and Duel.IsExistingMatchingCard(s.negfilter,tp,0,LOCATION_MZONE,1,nil) end
+	Duel.SetOperationInfo(0,CATEGORY_DISABLE,nil,1,1-tp,LOCATION_MZONE)
+end
+function s.negop(e,tp,eg,ep,ev,re,r,rp)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
+	local rg=Duel.SelectReleaseGroup(tp,nil,1,1,false,1,true,e:GetHandler(),tp,nil,nil,nil)
+	if #rg>0 and Duel.Release(rg,REASON_EFFECT)~=0 then
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_NEGATE)
+		local g=Duel.SelectMatchingCard(tp,s.negfilter,tp,0,LOCATION_MZONE,1,1,nil)
+		if #g>0 then
+			local tc=g:GetFirst()
+			Duel.BreakEffect()
+			local e1=Effect.CreateEffect(e:GetHandler())
+			e1:SetType(EFFECT_TYPE_SINGLE)
+			e1:SetCode(EFFECT_DISABLE)
+			e1:SetReset(RESET_EVENT+RESETS_STANDARD)
+			tc:RegisterEffect(e1)
+			local e2=Effect.CreateEffect(e:GetHandler())
+			e2:SetType(EFFECT_TYPE_SINGLE)
+			e2:SetCode(EFFECT_DISABLE_EFFECT)
+			e2:SetReset(RESET_EVENT+RESETS_STANDARD)
+			tc:RegisterEffect(e2)
+		end
+	end
+end
+
+-- 4 & 5. Universal Tributed Detection via Reason Flags
+function s.payfilter(c,tp)
+	return c:IsPreviousControler(1-tp) and c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
+end
+function s.paycon(e,tp,eg,ep,ev,re,r,rp)
+	return eg:IsExists(s.payfilter,1,nil,tp)
+end
+function s.payop(e,tp,eg,ep,ev,re,r,rp)
+	local count=eg:FilterCount(s.payfilter,nil,tp)
+	if count>0 then
+		Duel.LoseLP(1-tp,count*500)
+	end
+end
+
+function s.atkfilter(c)
+	return c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
+end
+function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
+	return eg:IsExists(s.atkfilter,1,nil)
+end
+function s.watfilter(c)
+	return c:IsFaceup() and c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_PLANT)
+end
+function s.atkop(e,tp,eg,ep,ev,re,r,rp)
+	local count=eg:FilterCount(s.atkfilter,nil)
+	if count==0 then return end
+	local g=Duel.GetMatchingGroup(s.watfilter,tp,LOCATION_MZONE,0,nil)
+	for tc in aux.Next(g) do
+		local e1=Effect.CreateEffect(e:GetHandler())
+		e1:SetType(EFFECT_TYPE_SINGLE)
+		e1:SetCode(EFFECT_UPDATE_ATTACK)
+		e1:SetValue(count*200)
+		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
+		tc:RegisterEffect(e1)
+	end
+end
