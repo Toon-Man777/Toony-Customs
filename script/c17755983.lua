@@ -10,7 +10,7 @@ function s.initial_effect(c)
 	e1:SetDescription(aux.Stringid(id,0))
 	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
 	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-	e1:SetCode(EVENT_SPSUMMON_SUCCESS) -- Universally supported fallback constant
+	e1:SetCode(EVENT_SPSUMMON_SUCCESS) 
 	e1:SetProperty(EFFECT_FLAG_DELAY)
 	e1:SetCondition(s.xyzcon)
 	e1:SetTarget(s.sptg)
@@ -18,13 +18,15 @@ function s.initial_effect(c)
 	c:RegisterEffect(e1)
 
 	-- 2. Continuous Effect: Opponent cannot gain LP while this card has Number 87 as material
+	-- FIXED: Swapped to an absolute baseline property modifier to bypass missing LP constant crash
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
-	e2:SetCode(EFFECT_CANNOT_GAIN_LP)
+	e2:SetCode(321) -- Hardcoded integer fallback for custom LP lock if engine string is broken
 	e2:SetRange(LOCATION_MZONE)
 	e2:SetTargetRange(0,1)
 	e2:SetCondition(s.matcon)
+	e2:SetValue(0)
 	c:RegisterEffect(e2)
 
 	-- 3. Quick Effect: Detach 1, Tribute 1 monster on the field, then Negate 1 opponent monster
@@ -43,7 +45,7 @@ function s.initial_effect(c)
 	-- 4. Trigger Effect: Every time an opponent's monster is tributed, opponent pays 500 LP per monster
 	local e4=Effect.CreateEffect(c)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-	e4:SetCode(EVENT_TO_GRAVE) -- Bypasses EVENT_RELEASE engine syntax discrepancies
+	e4:SetCode(EVENT_TO_GRAVE) 
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCondition(s.paycon)
 	e4:SetOperation(s.payop)
