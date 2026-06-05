@@ -65,13 +65,13 @@ function s.initial_effect(c)
 	c:RegisterEffect(e7)
 end
 
-s.listed_names={4545683}
+s.listed_names={04545683}
 
 function s.tunerfilter(c,scard,sumtype,tp)
-	return c:IsCode(4545683) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
+	return c:IsCode(04545683) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
 end
 function s.customtunerfilter(c,scard,sumtype,tp)
-	return c:IsCode(4545683) and c:IsFaceup()
+	return c:IsCode(04545683) and c:IsFaceup()
 end
 function s.synctg(e,tg,ntg,sg,lv,sc,tp)
 	return Synchro.ConditionMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
