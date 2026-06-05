@@ -34,7 +34,8 @@ function s.initial_effect(c)
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,0))
 	e4:SetCategory(CATEGORY_EQUIP+CATEGORY_DESTROY)
-	e4:SetType(EFFECT_TYPE_QUIVER+EFFECT_TYPE_QUICK_O)
+	-- FIXED: Changed the invalid EFFECT_TYPE_QUIVER to EFFECT_TYPE_QUICK_O
+	e4:SetType(EFFECT_TYPE_QUICK_O)
 	e4:SetCode(EVENT_FREE_CHAIN)
 	e4:SetRange(LOCATION_MZONE)
 	-- "Once while face-up on the field" restriction
