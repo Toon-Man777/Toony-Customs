@@ -2,8 +2,8 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Must be Xyz Summoned first
 	c:EnableReviveLimit()
-	-- FIXED: Swapped to the absolute vintage helper format with lowercase 'x'
-	aux.AddXyzProcedure(c,nil,8,3)
+	-- FIXED: Changed from aux.AddXyzProcedure to the modern object syntax
+	Xyz.AddProcedure(c,nil,8,3)
 
 	-- 1. Trigger Effect: When Xyz Summoned, Special Summon 1 WATER Plant from Deck/GY, then you can Tribute 1 monster
 	local e1=Effect.CreateEffect(c)
