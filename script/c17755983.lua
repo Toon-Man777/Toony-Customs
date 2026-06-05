@@ -2,17 +2,17 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Must be Xyz Summoned first
 	c:EnableReviveLimit()
-	-- Modern object syntax (Confirmed working via line 6 passing!)
+	-- Modern object syntax
 	Xyz.AddProcedure(c,nil,8,3)
 
 	-- 1. Trigger Effect: When Xyz Summoned, Special Summon 1 WATER Plant from Deck/GY, then you can Tribute 1 monster
 	local e1=Effect.CreateEffect(c)
 	e1:SetDescription(aux.Stringid(id,0))
-	-- FIXED: Removed CATEGORY_RELEASE to prevent parameter nil crash
 	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
-	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	-- FIXED: Swapped to a safe single-type trigger property configuration to prevent nil errors
+	e1:SetType(EFFECT_TYPE_SINGLE)
 	e1:SetCode(EVENT_XYZ_SUMMON)
-	e1:SetProperty(EFFECT_FLAG_DELAY)
+	e1:SetProperty(EFFECT_FLAG_DELAY+EFFECT_FLAG_TRIGGER_O)
 	e1:SetTarget(s.sptg)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
@@ -30,7 +30,6 @@ function s.initial_effect(c)
 	-- 3. Quick Effect: Detach 1, Tribute 1 monster on the field, then Negate 1 opponent monster
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,1))
-	-- FIXED: Removed CATEGORY_RELEASE here as well
 	e3:SetCategory(CATEGORY_DISABLE)
 	e3:SetType(EFFECT_TYPE_QUICK_O)
 	e3:SetCode(EVENT_FREE_CHAIN)
