@@ -1,20 +1,20 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Synchro Summon materials: "Meklord Emperor Wisel" + 1+ non-Tuner Machine monsters
+	-- Must be Synchro Summoned
 	c:EnableReviveLimit()
-	Synchro.AddProcedure(c,s.tunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
-
-	-- 1. Custom Summon Rule: Treat 1 "Meklord Emperor Wisel" you control as a Tuner
+	-- Custom Synchro Procedure: 1 "Meklord Emperor Wisel" (treated as Tuner) + 1+ non-Tuner Machine monsters
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
-	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
-	e1:SetCode(EFFECT_SYNCHRO_MATERIAL_CUSTOM)
+	e1:SetCode(EFFECT_SPSUMMON_PROC)
+	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE+EFFECT_FLAG_IGNORE_IMMUNE)
 	e1:SetRange(LOCATION_EXTRA)
-	e1:SetTarget(s.synctg)
-	e1:SetOperation(s.syncop)
+	e1:SetCondition(s.syncon)
+	e1:SetTarget(s.syntg)
+	e1:SetOperation(s.synop)
+	e1:SetValue(SUMMON_TYPE_SYNCHRO)
 	c:RegisterEffect(e1)
 
-	-- 2. Ignition Effect: Target 1 opponent's monster Special Summoned from the Extra Deck; equip it
+	-- Once per turn: Equip 1 opponent's Extra Deck Special Summoned monster
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,0))
 	e2:SetCategory(CATEGORY_EQUIP)
@@ -25,60 +25,77 @@ function s.initial_effect(c)
 	e2:SetTarget(s.eqtg)
 	e2:SetOperation(s.eqop)
 	c:RegisterEffect(e2)
+	aux.AddEREquipLimit(c,nil,s.eqval,s.equipop,e2)
 
-	-- 3. Continuous Effect: Gains ATK equal to the combined ATK of monsters equipped by its own effect
+	-- Can make up to 2 attacks on monsters during each Battle Phase
 	local e3=Effect.CreateEffect(c)
 	e3:SetType(EFFECT_TYPE_SINGLE)
-	e3:SetCode(EFFECT_UPDATE_ATTACK)
-	e3:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
-	e3:SetRange(LOCATION_MZONE)
-	e3:SetValue(s.atkval)
+	e3:SetCode(EFFECT_攻击_MONSTER) -- Internal engine code allowance flag for multi-monster attacks
+	e3:SetValue(2)
 	c:RegisterEffect(e3)
 
-	-- 4. Continuous Effect: Can make up to 2 attacks on monsters during each Battle Phase
-	-- (Completely replaced the broken engine constants with standard direct attack restriction)
+	-- Quick Effect: Negate a Spell activation and destroy it
 	local e4=Effect.CreateEffect(c)
-	e4:SetType(EFFECT_TYPE_SINGLE)
-	e4:SetCode(EFFECT_CANNOT_DIRECT_ATTACK)
+	e4:SetDescription(aux.Stringid(id,1))
+	e4:SetCategory(CATEGORY_DISABLE+CATEGORY_DESTROY)
+	e4:SetType(EFFECT_TYPE_QUICK_O)
+	e4:SetCode(EVENT_CHAINING)
+	e4:SetRange(LOCATION_MZONE)
+	e4:SetCountLimit(1)
+	e4:SetCondition(s.discon)
+	e4:SetTarget(s.distg)
+	e4:SetOperation(s.disop)
 	c:RegisterEffect(e4)
+end
+
+s.listed_names={9264} -- Meklord Emperor Wisel
+
+-- Synchro Material Math Setup
+function s.tunerfilter(c)
+	return c:IsCode(9264) or c:IsType(TYPE_TUNER)
+end
+function s.nontunerfilter(c,scard,sumtype,tp)
+	return c:IsRace(RACE_MACHINE,scard,sumtype,tp)
+end
+function s.syncon(e,c,smat,mg,minc,maxc)
+	if c==nil then return true end
+	local tp=c:GetControler()
+	local g=Duel.GetMatchingGroup(Card.IsCanBeSynchroMaterial,tp,LOCATION_MZONE,0,nil,c)
+	return g:IsExists(s.tunerfilter,1,nil) and g:IsExists(s.nontunerfilter,1,nil,c,SUMMON_TYPE_SYNCHRO,tp)
+end
+function s.syntg(e,tp,eg,ep,ev,re,r,rp,chk,c,smat,mg,minc,maxc)
+	local g=Duel.GetMatchingGroup(Card.IsCanBeSynchroMaterial,tp,LOCATION_MZONE,0,nil,c)
+	local tuners=g:Filter(s.tunerfilter,nil)
 	
-	local e5=Effect.CreateEffect(c)
-	e5:SetType(EFFECT_TYPE_SINGLE)
-	e5:SetCode(EFFECT_EXTRA_ATTACK_MONSTER)
-	e5:SetValue(1)
-	c:RegisterEffect(e5)
-
-	-- 5. Quick Effect: Once per turn, negate a Spell activation and destroy it
-	local e6=Effect.CreateEffect(c)
-	e6:SetDescription(aux.Stringid(id,1))
-	e6:SetCategory(CATEGORY_NEGATE+CATEGORY_DESTROY)
-	e6:SetType(EFFECT_TYPE_QUICK_O)
-	e6:SetCode(EVENT_CHAINING)
-	e6:SetProperty(EFFECT_FLAG_DAMAGE_STEP+EFFECT_FLAG_DAMAGE_CAL)
-	e6:SetRange(LOCATION_MZONE)
-	e6:SetCountLimit(1)
-	e6:SetCondition(s.negcon)
-	e6:SetTarget(s.negtg)
-	e6:SetOperation(s.negop)
-	c:RegisterEffect(e6)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SMATERIAL)
+	local tuner=tuners:Select(tp,1,1,nil):GetFirst()
+	if not tuner then return false end
+	
+	local nontuners=g:Filter(s.nontunerfilter,tuner,c,SUMMON_TYPE_SYNCHRO,tp)
+	local lv=c:GetLevel() - tuner:GetLevel()
+	if lv<=0 then return false end
+	
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SMATERIAL)
+	local nontun=nontuners:SelectWithSumEqual(tp,Card.GetSynchroLevel,lv,1,99,c)
+	if #nontun==0 then return false end
+	
+	local sg=Group.CreateGroup()
+	sg:AddCard(tuner)
+	sg:Merge(nontun)
+	sg:KeepAlive()
+	e:SetLabelObject(sg)
+	return true
+end
+function s.synop(e,tp,eg,ep,ev,re,r,rp,c,smat,mg,minc,maxc)
+	local g=e:GetLabelObject()
+	c:SetMaterial(g)
+	Duel.SendtoGrave(g,REASON_MATERIAL+REASON_SYNCHRO)
+	g:DeleteGroup()
 end
 
-s.listed_names={68140974} -- Meklord Emperor Wisel
-
-function s.tunerfilter(c,scard,sumtype,tp)
-	return c:IsCode(68140974) and c:IsType(TYPE_TUNER,scard,sumtype,tp)
-end
-function s.customtunerfilter(c,scard,sumtype,tp)
-	return c:IsCode(68140974) and c:IsFaceup()
-end
-function s.synctg(e,tg,ntg,sg,lv,sc,tp)
-	return Synchro.ConditionMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
-end
-function s.syncop(e,tp,eg,ep,ev,re,r,rp,tg,ntg,sg,lv,sc)
-	return Synchro.OperationMinMax(tg,ntg,sg,lv,sc,tp,s.customtunerfilter,1,1,Synchro.NonTunerEx(Card.IsRace,RACE_MACHINE),1,99)
-end
+-- Absorber Operations
 function s.eqfilter(c)
-	return c:IsFaceup() and c:IsSummonType(SUMMON_TYPE_SPECIAL) and c:IsSummonLocation(LOCATION_EXTRA) and c:IsAbleToChangeControler()
+	return c:IsFaceup() and c:IsSummonLocation(LOCATION_EXTRA)
 end
 function s.eqtg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	if chkc then return chkc:IsLocation(LOCATION_MZONE) and chkc:IsControler(1-tp) and s.eqfilter(chkc) end
@@ -88,51 +105,33 @@ function s.eqtg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	local g=Duel.SelectTarget(tp,s.eqfilter,tp,0,LOCATION_MZONE,1,1,nil)
 	Duel.SetOperationInfo(0,CATEGORY_EQUIP,g,1,0,0)
 end
-function s.eqop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	local tc=Duel.GetFirstTarget()
-	if tc and tc:IsRelateToEffect(e) and tc:IsFaceup() then
-		if c:IsFaceup() and c:IsRelateToEffect(e) then
-			if not Duel.Equip(tp,tc,c) then return end
-			local e1=Effect.CreateEffect(c)
-			e1:SetType(EFFECT_TYPE_SINGLE)
-			e1:SetProperty(EFFECT_FLAG_COPY_INHERIT+EFFECT_FLAG_OWNER_RELATE)
-			e1:SetCode(EFFECT_EQUIP_LIMIT)
-			e1:SetValue(s.eqlimit)
-			e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-			tc:RegisterEffect(e1)
-		else
-			Duel.SendtoGrave(tc,REASON_EFFECT)
-		end
-	end
+function s.eqval(ec,c,tp)
+	return ec:IsControler(1-tp)
 end
-function s.eqlimit(e,c)
-	return e:GetOwner()==c
+function s.equipop(c,e,tp,tc)
+	if not c:EquipByEffectAndLimitRegister(e,tp,tc,nil,true) then return end
+	local atk=tc:GetTextAtk()
+	if atk<0 then atk=0 end
+	local e1=Effect.CreateEffect(c)
+	e1:SetType(EFFECT_TYPE_SINGLE)
+	e1:SetCode(EFFECT_UPDATE_ATTACK)
+	e1:SetValue(atk)
+	e1:SetReset(RESET_EVENT+RESETS_STANDARD_DISABLE)
+	c:RegisterEffect(e1)
 end
-function s.atkfilter(c,ec)
-	return c:GetEquipTarget()==ec
-end
-function s.atkval(e,c)
-	local atk=0
-	local g=Duel.GetMatchingGroup(s.atkfilter,e:GetHandlerPlayer(),LOCATION_SZONE,0,nil,c)
-	for tc in aux.Next(g) do
-		local catk=tc:GetTextAttack()
-		if catk<0 then catk=0 end
-		atk=atk+catk
-	end
-	return atk
-end
-function s.negcon(e,tp,eg,ep,ev,re,r,rp)
+
+-- Spell Negation Logic
+function s.discon(e,tp,eg,ep,ev,re,r,rp)
 	return re:IsActiveType(TYPE_SPELL) and Duel.IsChainNegatable(ev)
 end
-function s.negtg(e,tp,eg,ep,ev,re,r,rp,chk)
+function s.distg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
-	Duel.SetOperationInfo(0,CATEGORY_NEGATE,eg,1,0,0)
-	if re:GetHandler():IsDestructable() and re:GetHandler():IsRelateToEffect(re) then
+	Duel.SetOperationInfo(0,CATEGORY_DISABLE,eg,1,0,0)
+	if re:GetHandler():IsRelateToEffect(re) then
 		Duel.SetOperationInfo(0,CATEGORY_DESTROY,eg,1,0,0)
 	end
 end
-function s.negop(e,tp,eg,ep,ev,re,r,rp)
+function s.disop(e,tp,eg,ep,ev,re,r,rp)
 	if Duel.NegateActivation(ev) and re:GetHandler():IsRelateToEffect(re) then
 		Duel.Destroy(eg,REASON_EFFECT)
 	end
