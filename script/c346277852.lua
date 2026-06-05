@@ -1,83 +1,89 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Link Summon Procedure: Requires 2 "Meklord" monsters
-	c:EnableReviveLimit()
-	-- FIXED: Swapped aux.AddLinkProcedure for the universally stable Link.AddProcedure
-	Link.AddProcedure(c,aux.FilterBoolFunction(Card.IsSetCard,0x13),2,2)
+	-- Equip Procedure
+	aux.AddEquipProcedure(c,nil,s.eqfilter)
 
-	-- 1. Ignition Effect: Special Summon 2 "Meklord Army" monsters to zones this card points to
+	-- 1. Continuous Effect: Grant Quick Effect status to equipped monster's Ignition effects
 	local e1=Effect.CreateEffect(c)
-	e1:SetDescription(aux.Stringid(id,0))
-	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
-	e1:SetType(EFFECT_TYPE_IGNITION)
-	e1:SetRange(LOCATION_MZONE)
-	e1:SetCountLimit(1,id)
-	e1:SetTarget(s.sptg)
-	e1:SetOperation(s.spop)
+	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_GRANT)
+	e1:SetRange(LOCATION_SZONE)
+	e1:SetTargetRange(LOCATION_MZONE,LOCATION_MZONE)
+	e1:SetTarget(s.tg)
+	e1:SetCondition(s.quickcon)
+	e1:SetLabelObject(e1)
 	c:RegisterEffect(e1)
 
-	-- 2. Ignition Effect: Destroy 1 card on your field to add 1 "Meklord" monster from GY to your hand
+	-- 2. Ignition Effect: Once per turn, Special Summon 1 "Meklord Army" monster from your GY
 	local e2=Effect.CreateEffect(c)
-	e2:SetDescription(aux.Stringid(id,1))
-	e2:SetCategory(CATEGORY_DESTROY+CATEGORY_TOHAND)
+	e2:SetDescription(aux.Stringid(id,0))
+	e2:SetCategory(CATEGORY_SPECIAL_SUMMON)
 	e2:SetType(EFFECT_TYPE_IGNITION)
-	e2:SetRange(LOCATION_MZONE)
-	e2:SetCountLimit(1,id+100)
-	e2:SetTarget(s.thtg)
-	e2:SetOperation(s.thop)
+	e2:SetRange(LOCATION_SZONE)
+	e2:SetCountLimit(1)
+	e2:SetTarget(s.sptg)
+	e2:SetOperation(s.spop)
 	c:RegisterEffect(e2)
+
+	-- 3. Trigger Effect: If sent to the GY by your own card effect, draw 2 cards (Twice per Duel)
+	local e3=Effect.CreateEffect(c)
+	e3:SetDescription(aux.Stringid(id,1))
+	e3:SetCategory(CATEGORY_DRAW)
+	e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e3:SetProperty(EFFECT_FLAG_DELAY+EFFECT_FLAG_PLAYER_TARGET)
+	e3:SetCode(EVENT_TO_GRAVE)
+	e3:SetCountLimit(2,id,EFFECT_COUNT_CODE_DUEL)
+	e3:SetCondition(s.drcon)
+	e3:SetTarget(s.drtg)
+	e3:SetOperation(s.drop)
+	c:RegisterEffect(e3)
 end
 
-s.listed_series={0x13, 0x6013} -- Meklord, Meklord Army
+s.listed_series={0x13, 0x3013, 0x5013, 0x6013} -- Meklord, Meklord Emperor, Meklord Astro, Meklord Army
 
--- 1. Summon 2 "Meklord Army" monsters to Link Zones Logic
+-- Equip Filter Target Check
+function s.eqfilter(c)
+	return c:IsFaceup() and (c:IsSetCard(0x3013) or c:IsSetCard(0x5013))
+end
+
+-- 1. Quick Effect Granting Logic
+function s.tg(e,c)
+	return c==e:GetHandler():GetEquipTarget()
+end
+function s.quickcon(e)
+	local ec=e:GetHandler():GetEquipTarget()
+	return ec and (ec:IsSetCard(0x3013) or ec:IsSetCard(0x5013))
+end
+
+-- 2. "Meklord Army" GY Special Summon Logic
 function s.spfilter(c,e,tp)
 	return c:IsSetCard(0x6013) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then
-		local zone=e:GetHandler():GetLinkedZone(tp)
-		if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then return false end
-		return zone>0 and Duel.GetLocationCount(tp,LOCATION_MZONE,tp,LOCATION_REASON_TOFIELD,zone)>=2
-			and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK,0,2,nil,e,tp)
-	end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,2,tp,LOCATION_DECK)
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+		and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_GRAVE,0,1,nil,e,tp) end
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_GRAVE)
 end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	if not c:IsRelateToEffect(e) or Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then return end
-	
-	local zone=c:GetLinkedZone(tp)
-	if Duel.GetLocationCount(tp,LOCATION_MZONE,tp,LOCATION_REASON_TOFIELD,zone)<2 then return end
-	
+	if Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-	local g=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_DECK,0,2,2,nil,e,tp)
-	if #g==2 then
-		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP,zone)
+	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter),tp,LOCATION_GRAVE,0,1,1,nil,e,tp)
+	if #g>0 then
+		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
 	end
 end
 
--- 2. Destroy and Salvage Logic
-function s.thfilter(c)
-	return c:IsSetCard(0x13) and c:IsType(TYPE_MONSTER) and c:IsAbleToHand()
+-- 3. Self-Destruction Draw 2 Logic
+function s.drcon(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	return c:IsReason(REASON_EFFECT) and rp==tp
 end
-function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(nil,tp,LOCATION_ONFIELD,0,1,nil)
-		and Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_GRAVE,0,1,nil) end
-	local g=Duel.GetMatchingGroup(nil,tp,LOCATION_ONFIELD,0,nil)
-	Duel.SetOperationInfo(0,CATEGORY_DESTROY,g,1,0,0)
-	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_GRAVE)
+function s.drtg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return Duel.IsPlayerCanDraw(tp,2) end
+	Duel.SetTargetPlayer(tp)
+	Duel.SetTargetParam(2)
+	Duel.SetOperationInfo(0,CATEGORY_DRAW,nil,0,tp,2)
 end
-function s.thop(e,tp,eg,ep,ev,re,r,rp)
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)
-	local dg=Duel.SelectMatchingCard(tp,nil,tp,LOCATION_ONFIELD,0,1,1,nil)
-	if #dg>0 and Duel.Destroy(dg,REASON_EFFECT)~=0 then
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-		local sg=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.thfilter),tp,LOCATION_GRAVE,0,1,1,nil)
-		if #sg>0 then
-			Duel.BreakEffect()
-			Duel.SendtoHand(sg,nil,REASON_EFFECT)
-			Duel.ConfirmCards(1-tp,sg)
-		end
-	end
+function s.drop(e,tp,eg,ep,ev,re,r,rp)
+	local p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)
+	Duel.Draw(p,d,REASON_EFFECT)
 end
