@@ -5,14 +5,14 @@ function s.initial_effect(c)
 	-- Modern object syntax
 	Xyz.AddProcedure(c,nil,8,3)
 
-	-- 1. Trigger Effect: When Xyz Summoned, Special Summon 1 WATER Plant from Deck/GY, then you can Tribute 1 monster
+	-- 1. Trigger Effect: When Special Summoned (and it was an Xyz Summon)
 	local e1=Effect.CreateEffect(c)
 	e1:SetDescription(aux.Stringid(id,0))
 	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
-	-- FIXED: Swapped to a safe single-type trigger property configuration to prevent nil errors
-	e1:SetType(EFFECT_TYPE_SINGLE)
-	e1:SetCode(EVENT_XYZ_SUMMON)
-	e1:SetProperty(EFFECT_FLAG_DELAY+EFFECT_FLAG_TRIGGER_O)
+	e1:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e1:SetCode(EVENT_SPSUMMON_SUCCESS) -- Universally supported fallback constant
+	e1:SetProperty(EFFECT_FLAG_DELAY)
+	e1:SetCondition(s.xyzcon)
 	e1:SetTarget(s.sptg)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
@@ -42,8 +42,8 @@ function s.initial_effect(c)
 
 	-- 4. Trigger Effect: Every time an opponent's monster is tributed, opponent pays 500 LP per monster
 	local e4=Effect.CreateEffect(c)
-	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_F)
-	e4:SetCode(EVENT_RELEASE)
+	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e4:SetCode(EVENT_TO_GRAVE) -- Bypasses EVENT_RELEASE engine syntax discrepancies
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCondition(s.paycon)
 	e4:SetOperation(s.payop)
@@ -51,16 +51,20 @@ function s.initial_effect(c)
 
 	-- 5. Trigger Effect: WATER Plant monsters you control gain 200 ATK each time a monster is tributed
 	local e5=Effect.CreateEffect(c)
-	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_F)
-	e5:SetCode(EVENT_RELEASE)
+	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+	e5:SetCode(EVENT_TO_GRAVE)
 	e5:SetRange(LOCATION_MZONE)
+	e5:SetCondition(s.atkcon)
 	e5:SetOperation(s.atkop)
 	c:RegisterEffect(e5)
 end
 
 s.listed_names={89516305} -- Number 87: Queen of the Night
 
--- 1. Xyz Summon Trigger Logic
+-- 1. Xyz Summon Check Logic
+function s.xyzcon(e,tp,eg,ep,ev,re,r,rp)
+	return e:GetHandler():IsSummonType(SUMMON_TYPE_XYZ)
+end
 function s.spfilter(c,e,tp)
 	return c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_PLANT) and c:IsCanBeSpecialSummoned(e,0,tp,false,false,POS_FACEUP_ATTACK)
 end
@@ -125,9 +129,9 @@ function s.negop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 4. Opponent Tributed Burn Processing
+-- 4 & 5. Universal Tributed Detection via Reason Flag
 function s.payfilter(c,tp)
-	return c:IsPreviousControler(1-tp) and c:IsPreviousLocation(LOCATION_MZONE)
+	return c:IsPreviousControler(1-tp) and c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
 end
 function s.paycon(e,tp,eg,ep,ev,re,r,rp)
 	return eg:IsExists(s.payfilter,1,nil,tp)
@@ -139,14 +143,19 @@ function s.payop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 5. WATER Plant Stat Multiplication Logic
 function s.atkfilter(c)
+	return c:IsPreviousLocation(LOCATION_MZONE) and (c:GetReason()&REASON_RELEASE)~=0
+end
+function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
+	return eg:IsExists(s.atkfilter,1,nil)
+end
+function s.watfilter(c)
 	return c:IsFaceup() and c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_PLANT)
 end
 function s.atkop(e,tp,eg,ep,ev,re,r,rp)
-	local count=eg:FilterCount(Card.IsPreviousLocation,nil,LOCATION_MZONE)
+	local count=eg:FilterCount(s.atkfilter,nil)
 	if count==0 then return end
-	local g=Duel.GetMatchingGroup(s.atkfilter,tp,LOCATION_MZONE,0,nil)
+	local g=Duel.GetMatchingGroup(s.watfilter,tp,LOCATION_MZONE,0,nil)
 	for tc in aux.Next(g) do
 		local e1=Effect.CreateEffect(e:GetHandler())
 		e1:SetType(EFFECT_TYPE_SINGLE)
