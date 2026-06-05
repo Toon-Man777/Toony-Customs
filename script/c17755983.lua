@@ -2,7 +2,8 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Must be Xyz Summoned first
 	c:EnableReviveLimit()
-	Xyz.AddProcedure(c,nil,8,3) -- Standard Rank 8 procedure (adjust parameters if needed)
+	-- FIXED: Swapped modern Xyz.AddProcedure for universally compatible aux.AddXyzProcedure
+	aux.AddXyzProcedure(c,nil,8,3)
 
 	-- 1. Trigger Effect: When Xyz Summoned, Special Summon 1 WATER Plant from Deck/GY, then you can Tribute 1 monster
 	local e1=Effect.CreateEffect(c)
@@ -33,7 +34,7 @@ function s.initial_effect(c)
 	e3:SetCode(EVENT_FREE_CHAIN)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetCountLimit(1)
-	e3:SetCost(aux.dxmcostgen(1,1,nil)) -- Safe, modern detach cost handler
+	e3:SetCost(s.negcost)
 	e3:SetTarget(s.negtg)
 	e3:SetOperation(s.negop)
 	c:RegisterEffect(e3)
@@ -72,13 +73,12 @@ function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
 	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter),tp,LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil,e,tp)
 	if #g>0 and Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP_ATTACK)~=0 then
-		-- Optional sequence: "then you can Tribute 1 Monster on the field"
 		local rg=Duel.GetMatchingGroup(Card.IsReleasableByEffect,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,nil)
 		if #rg>0 and Duel.SelectYesNo(tp,aux.Stringid(id,2)) then
 			Duel.BreakEffect()
 			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
 			local sg=rg:Select(tp,1,1,nil)
-			Duel.Destroy(sg,REASON_EFFECT+REASON_RELEASE) -- Handles Tribute processing
+			Duel.Release(sg,REASON_EFFECT)
 		end
 	end
 end
@@ -89,6 +89,10 @@ function s.matcon(e)
 end
 
 -- 3. Quick Effect Negation Logic
+function s.negcost(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_COST) end
+	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
+end
 function s.negfilter(c)
 	return c:IsFaceup() and not c:IsDisabled()
 end
@@ -101,8 +105,7 @@ end
 function s.negop(e,tp,eg,ep,ev,re,r,rp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
 	local rg=Duel.SelectMatchingCard(tp,Card.IsReleasableByEffect,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,1,nil)
-	if #rg>0 and Duel.Destroy(rg,REASON_EFFECT+REASON_RELEASE)~=0 then
-		-- "...then if you do, Negate 1 monster your opponent controls"
+	if #rg>0 and Duel.Release(rg,REASON_EFFECT)~=0 then
 		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_NEGATE)
 		local g=Duel.SelectMatchingCard(tp,s.negfilter,tp,0,LOCATION_MZONE,1,1,nil)
 		if #g>0 then
