@@ -3,11 +3,14 @@ function s.initial_effect(c)
 	-- Equip Procedure
 	aux.AddEquipProcedure(c,nil,s.eqfilter)
 
-	-- 1. Continuous Effect: Equipped monster's Ignition effects become Quick Effects
+	-- 1. Continuous Effect: Grant Quick Effect status to equipped monster's Ignition effects
 	local e1=Effect.CreateEffect(c)
-	e1:SetType(EFFECT_TYPE_EQUIP)
-	e1:SetCode(EFFECT_IGNITION_TO_QUICK)
+	e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_GRANT)
+	e1:SetRange(LOCATION_SZONE)
+	e1:SetTargetRange(LOCATION_MZONE,LOCATION_MZONE)
+	e1:SetTarget(s.tg)
 	e1:SetCondition(s.quickcon)
+	e1:SetLabelObject(e1)
 	c:RegisterEffect(e1)
 
 	-- 2. Ignition Effect: Once per turn, Special Summon 1 "Meklord Army" monster from your GY
@@ -37,12 +40,15 @@ end
 
 s.listed_series={0x13, 0x3013, 0x5013, 0x6013} -- Meklord, Meklord Emperor, Meklord Astro, Meklord Army
 
--- Equip filter target check
+-- Equip Filter Target Check
 function s.eqfilter(c)
 	return c:IsFaceup() and (c:IsSetCard(0x3013) or c:IsSetCard(0x5013))
 end
 
--- 1. Ignition to Quick Effect Condition
+-- 1. Quick Effect Granting Logic
+function s.tg(e,c)
+	return c==e:GetHandler():GetEquipTarget()
+end
 function s.quickcon(e)
 	local ec=e:GetHandler():GetEquipTarget()
 	return ec and (ec:IsSetCard(0x3013) or ec:IsSetCard(0x5013))
@@ -66,10 +72,9 @@ function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 3. Self-Destruction / Send to GY Draw 2 Logic
+-- 3. Self-Destruction Draw 2 Logic
 function s.drcon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	-- Checks if it was sent to GY by a card effect you controlled
 	return c:IsReason(REASON_EFFECT) and rp==tp
 end
 function s.drtg(e,tp,eg,ep,ev,re,r,rp,chk)
