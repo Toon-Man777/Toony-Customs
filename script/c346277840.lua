@@ -2,7 +2,8 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Link Summon Procedure: Requires 2 "Meklord" monsters
 	c:EnableReviveLimit()
-	aux.AddLinkProcedure(c,aux.FilterBoolFunction(Card.IsSetCard,0x13),2,2)
+	-- FIXED: Swapped aux.AddLinkProcedure for the universally stable Link.AddProcedure
+	Link.AddProcedure(c,aux.FilterBoolFunction(Card.IsSetCard,0x13),2,2)
 
 	-- 1. Ignition Effect: Special Summon 2 "Meklord Army" monsters to zones this card points to
 	local e1=Effect.CreateEffect(c)
@@ -15,7 +16,7 @@ function s.initial_effect(c)
 	e1:SetOperation(s.spop)
 	c:RegisterEffect(e1)
 
-	-- 2. Ignition Effect: Destroy 1 card on your field to add 1 "Meklord" monster from GY to hand
+	-- 2. Ignition Effect: Destroy 1 card on your field to add 1 "Meklord" monster from GY to your hand
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,1))
 	e2:SetCategory(CATEGORY_DESTROY+CATEGORY_TOHAND)
@@ -36,7 +37,6 @@ end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then
 		local zone=e:GetHandler():GetLinkedZone(tp)
-		-- Must have at least 2 empty zones available that this card points to
 		if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then return false end
 		return zone>0 and Duel.GetLocationCount(tp,LOCATION_MZONE,tp,LOCATION_REASON_TOFIELD,zone)>=2
 			and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_DECK,0,2,nil,e,tp)
@@ -47,14 +47,12 @@ function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if not c:IsRelateToEffect(e) or Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then return end
 	
-	-- FIXED: Grabs the correct linked zone markers for the player
 	local zone=c:GetLinkedZone(tp)
 	if Duel.GetLocationCount(tp,LOCATION_MZONE,tp,LOCATION_REASON_TOFIELD,zone)<2 then return end
 	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
 	local g=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_DECK,0,2,2,nil,e,tp)
 	if #g==2 then
-		-- Spawns them exclusively into the zone arrays the Link-2 markers point to
 		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP,zone)
 	end
 end
