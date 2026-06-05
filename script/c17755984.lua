@@ -1,10 +1,10 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Fusion Materials: 1 "Edge Imp" + 2 "Fluffal"
+	-- Fusion Materials: 1 "Edge Imp" Monster + 2 "Fluffal" Monsters
 	c:EnableReviveLimit()
-	Fusion.AddProcedure(c,aux.FilterBoolFunctionEx(Card.IsSetCard,0xa9),2,aux.FilterBoolFunctionEx(Card.IsSetCard,0xc3),1)
+	Fusion.AddProcMixRep(c,true,true,s.matfilter2,2,2,s.matfilter1)
 
-	-- Cannot be destroyed by opponent's card effects
+	-- 1. Continuous Effect: Cannot be destroyed by opponent's card effects
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_SINGLE)
 	e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
@@ -13,7 +13,7 @@ function s.initial_effect(c)
 	e1:SetValue(aux.indoval)
 	c:RegisterEffect(e1)
 
-	-- ATK Boost for "Frightfur" monsters
+	-- 2. Continuous Effect: "Frightfur" monsters gain 200 ATK for every Fairy/Fiend in both GYs
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetCode(EFFECT_UPDATE_ATTACK)
@@ -23,21 +23,21 @@ function s.initial_effect(c)
 	e2:SetValue(s.atkval)
 	c:RegisterEffect(e2)
 
-	-- Special Summon destroyed monster and treat as "Frightfur"
+	-- 3. Trigger Effect: When this card destroys a monster by battle, Special Summon it as a "Frightfur" monster
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,0))
 	e3:SetCategory(CATEGORY_SPECIAL_SUMMON)
 	e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
 	e3:SetCode(EVENT_BATTLE_DESTROYING)
-	e3:SetCondition(aux.bdogcon)
+	e3:SetCondition(aux.bdgcon)
 	e3:SetTarget(s.sptg1)
 	e3:SetOperation(s.spop1)
 	c:RegisterEffect(e3)
 
-	-- Special Summon Frightfur from Extra Deck or GY
+	-- 4. Ignition Effect: Banish 1 monster from either GY to Special Summon 1 "Frightfur" from Extra Deck with equal or lower Level
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,1))
-	e4:SetCategory(CATEGORY_SPECIAL_SUMMON)
+	e4:SetCategory(CATEGORY_REMOVE+CATEGORY_SPECIAL_SUMMON)
 	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCountLimit(1)
@@ -46,80 +46,69 @@ function s.initial_effect(c)
 	c:RegisterEffect(e4)
 end
 
-s.listed_series={0xa9,0xc3,0xad,0xf00}
+s.listed_series={0xc1, 0xa9, 0xad} -- Edge Imp, Fluffal, Frightfur
 
--- ATK Value logic: 200 for every Fairy/Fiend in both GYs
+-- Material Helper Filters
+function s.matfilter1(c,fc,sumtype,tp)
+	return c:IsSetCard(0xc1,fc,sumtype,tp) -- "Edge Imp"
+end
+function s.matfilter2(c,fc,sumtype,tp)
+	return c:IsSetCard(0xa9,fc,sumtype,tp) -- "Fluffal"
+end
+
+-- 2. Global ATK Calculation Logic
 function s.atkfilter(c)
-	return c:IsRace(RACE_FAIRY+RACE_FIEND) and c:IsLocation(LOCATION_GRAVE)
+	return c:IsMonster() and (c:IsRace(RACE_FAIRY) or c:IsRace(RACE_FIEND))
 end
 function s.atkval(e,c)
 	return Duel.GetMatchingGroupCount(s.atkfilter,e:GetHandlerPlayer(),LOCATION_GRAVE,LOCATION_GRAVE,nil)*200
 end
 
--- Battle Summon Logic
+-- 3. Battle Destruction Steal & Sub-Archetype Overwrite Logic
 function s.sptg1(e,tp,eg,ep,ev,re,r,rp,chk)
-	local bc=e:GetHandler():GetBattleTarget()
+	local tc=e:GetHandler():GetBattleTarget()
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
-		and bc:IsCanBeSpecialSummoned(e,0,tp,false,false) end
-	Duel.SetTargetCard(bc)
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,bc,1,0,0)
+		and tc:IsLocation(LOCATION_GRAVE) and tc:IsCanBeSpecialSummoned(e,0,tp,false,false) end
+	Duel.SetTargetCard(tc)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,tc,1,0,0)
 end
 function s.spop1(e,tp,eg,ep,ev,re,r,rp)
-	local bc=Duel.GetFirstTarget()
-	if bc:IsRelateToEffect(e) and Duel.SpecialSummon(bc,0,tp,tp,false,false,POS_FACEUP)>0 then
-		-- Treat as Frightfur while on field
-		local e1=Effect.CreateEffect(e:GetHandler())
+	local tc=Duel.GetFirstTarget()
+	if tc and tc:IsRelateToEffect(e) and Duel.SpecialSummon(tc,0,tp,tp,false,false,POS_FACEUP)~=0 then
+		local c=e:GetHandler()
+		-- Dynamically alters its identity traits to legally count as a "Frightfur" monster on your field
+		local e1=Effect.CreateEffect(c)
 		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
 		e1:SetCode(EFFECT_ADD_SETCODE)
-		e1:SetValue(0xad)
+		e1:SetValue(0xad) -- "Frightfur" setcode
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-		bc:RegisterEffect(e1)
+		tc:RegisterEffect(e1)
 	end
 end
 
--- Extra Deck / GY Summon Logic
-function s.exfilter(c,e,tp,lv)
-	return c:IsSetCard(0xad) and c:IsLevelBelow(lv) and Duel.GetLocationCountFromEx(tp,tp,nil,c)>0
-		and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
+-- 4. Graveyard Banish & Cheat Out From Extra Deck Logic
+function s.rmfilter(c,e,tp)
+	return c:IsMonster() and c:IsAbleToRemove() and c:HasLevel()
+		and Duel.IsExistingMatchingCard(s.exspfilter,tp,LOCATION_EXTRA,0,1,nil,e,tp,c:GetLevel())
 end
-function s.gyfilter(c,e,tp)
-	return c:IsSetCard(0xad) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
+function s.exspfilter(c,e,tp,lv)
+	return c:IsSetCard(0xad) and c:IsType(TYPE_FUSION) and c:HasLevel() and c:GetLevel()<=lv
+		and c:IsCanBeSpecialSummoned(e,0,tp,false,false) and Duel.GetLocationCountFromEx(tp,tp,nil,c)>0
 end
 function s.sptg2(e,tp,eg,ep,ev,re,r,rp,chk)
-	local b1=Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_GRAVE,0,1,nil)
-		and Duel.IsExistingMatchingCard(s.exfilter,tp,LOCATION_EXTRA,0,1,nil,e,tp,99) -- Temporary check
-	local b2=Duel.IsExistingMatchingCard(Card.IsDiscardable,tp,LOCATION_HAND,0,2,nil)
-		and Duel.IsExistingMatchingCard(s.gyfilter,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,nil,e,tp)
-	if chk==0 then return b1 or b2 end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_EXTRA+LOCATION_GRAVE)
+	if chk==0 then return Duel.IsExistingMatchingCard(s.rmfilter,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,nil,e,tp) end
+	Duel.SetOperationInfo(0,CATEGORY_REMOVE,nil,1,tp,LOCATION_GRAVE+LOCATION_GRAVE)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_EXTRA)
 end
 function s.spop2(e,tp,eg,ep,ev,re,r,rp)
-	local b1=Duel.IsExistingMatchingCard(Card.IsAbleToRemove,tp,LOCATION_GRAVE,0,1,nil)
-	local b2=Duel.IsExistingMatchingCard(Card.IsDiscardable,tp,LOCATION_HAND,0,2,nil)
-	
-	local op=0
-	if b1 and b2 then op=Duel.SelectOption(tp,aux.Stringid(id,2),aux.Stringid(id,3))
-	elseif b1 then op=Duel.SelectOption(tp,aux.Stringid(id,2))
-	elseif b2 then op=Duel.SelectOption(tp,aux.Stringid(id,3))+1
-	else return end
-
-	if op==0 then
-		-- Banish and Summon from Extra Deck
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
-		local rg=Duel.SelectMatchingCard(tp,Card.IsAbleToRemove,tp,LOCATION_GRAVE,0,1,1,nil)
-		if #rg>0 and Duel.Remove(rg,POS_FACEUP,REASON_COST)>0 then
-			local lv=rg:GetFirst():GetLevel()
-			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-			local sg=Duel.SelectMatchingCard(tp,s.exfilter,tp,LOCATION_EXTRA,0,1,1,nil,e,tp,lv)
-			if #sg>0 then Duel.SpecialSummon(sg,0,tp,tp,false,false,POS_FACEUP) end
-		end
-	else
-		-- Discard 2 and Summon from either GY
-		if Duel.DiscardHand(tp,Card.IsDiscardable,2,2,REASON_COST+REASON_DISCARD)>0 then
-			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-			local sg=Duel.SelectMatchingCard(tp,s.gyfilter,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,1,nil,e,tp)
-			if #sg>0 then Duel.SpecialSummon(sg,0,tp,tp,false,false,POS_FACEUP) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
+	local g=Duel.SelectMatchingCard(tp,s.rmfilter,tp,LOCATION_GRAVE,LOCATION_GRAVE,1,1,nil,e,tp)
+	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)~=0 then
+		local lv=g:GetFirst():GetLevel()
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+		local sc=Duel.SelectMatchingCard(tp,s.exspfilter,tp,LOCATION_EXTRA,0,1,1,nil,e,tp,lv):GetFirst()
+		if sc then
+			Duel.SpecialSummon(sc,0,tp,tp,false,false,POS_FACEUP)
 		end
 	end
 end

@@ -9,7 +9,7 @@ function s.initial_effect(c)
 	e1:SetType(EFFECT_TYPE_SINGLE)
 	e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
 	e1:SetCode(EFFECT_ADD_CODE)
-	e1:SetValue(64184058) -- Card code for "Cyberdark Dragon"
+	e1:SetValue(40418351) -- Card code for "Cyberdark Dragon"
 	c:RegisterEffect(e1)
 
 	-- 2. Continuous Effect: Cannot be targeted or destroyed by card effects
@@ -25,7 +25,7 @@ function s.initial_effect(c)
 	e3:SetValue(aux.indoval)
 	c:RegisterEffect(e3)
 
-	-- 3. Quick Effect: Equip 1 "Cyberdark" or "roid" from GY during your turn
+	-- 3. Quick Effect: Equip 1 Machine or Dragon from GY during your turn
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,0))
 	e4:SetCategory(CATEGORY_EQUIP)
@@ -84,12 +84,12 @@ function s.matfilter(c,fc,sumtype,tp)
 	return c:IsSetCard(0x4093,fc,sumtype,tp) or c:IsSetCard(0x16,fc,sumtype,tp)
 end
 
--- 3. Equip Logic
+-- 3. Equip Logic (Updated to check for Machine or Dragon)
 function s.eqcon(e,tp,eg,ep,ev,re,r,rp)
 	return Duel.GetTurnPlayer()==tp
 end
 function s.eqfilter(c)
-	return (c:IsSetCard(0x4093) or c:IsSetCard(0x16)) and c:IsType(TYPE_MONSTER) and not c:IsForbidden()
+	return c:IsMonster() and (c:IsRace(RACE_MACHINE) or c:IsRace(RACE_DRAGON)) and not c:IsForbidden()
 end
 function s.eqtg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	if chkc then return chkc:IsLocation(LOCATION_GRAVE) and chkc:IsControler(tp) and s.eqfilter(chkc) end

@@ -1,7 +1,7 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Xyz Summon materials: 3 Level 8 "Galaxy-Eyes" monsters
-	Xyz.AddProcedure(c,aux.FilterBoolFunction(Card.IsSetCard,0x107b),8,3)
+	-- Xyz Summon materials: 3 LIGHT Level 8 monsters
+	Xyz.AddProcedure(c,aux.FilterBoolFunction(Card.IsAttribute,ATTRIBUTE_LIGHT),8,3)
 	c:EnableReviveLimit()
 
 	-- 1. Continuous Effect: Can only control 1
@@ -30,42 +30,31 @@ function s.initial_effect(c)
 	e2:SetOperation(s.thop)
 	c:RegisterEffect(e2)
 
-	-- 4. Ignition Effect: Detach 1 to negate all other monsters and make their names "Galaxy-Eyes"
+	-- 4. Quick Effect: Battle Step temporary banish + second attack
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,1))
-	e3:SetCategory(CATEGORY_DISABLE)
-	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetCategory(CATEGORY_REMOVE)
+	e3:SetType(EFFECT_TYPE_QUICK_O)
+	e3:SetCode(EVENT_FREE_CHAIN)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetCountLimit(1,id+1000000)
+	e3:SetCondition(s.bcon)
 	e3:SetCost(Xyz.CutCost(1))
-	e3:SetTarget(s.distg)
-	e3:SetOperation(s.disop)
+	e3:SetTarget(s.btg)
+	e3:SetOperation(s.bop)
 	c:RegisterEffect(e3)
 
-	-- 5. Trigger Effect: During the End Phase, take control of 1 Xyz monster and attach the rest as materials
+	-- 5. Trigger Effect: During the End Phase, banish Xyz monsters from GY to gain ATK
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,2))
-	e4:SetCategory(CATEGORY_CONTROL)
+	e4:SetCategory(CATEGORY_REMOVE+CATEGORY_ATKCHANGE)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
 	e4:SetCode(EVENT_PHASE+PHASE_END)
 	e4:SetRange(LOCATION_MZONE)
 	e4:SetCountLimit(1,id+2000000)
-	e4:SetTarget(s.ctltg)
-	e4:SetOperation(s.ctlop)
+	e4:SetTarget(s.atktg)
+	e4:SetOperation(s.atkop)
 	c:RegisterEffect(e4)
-
-	-- 6. Trigger Effect: During the Standby Phase, banish Xyz monsters from GY to gain ATK
-	local e5=Effect.CreateEffect(c)
-	e5:SetDescription(aux.Stringid(id,3))
-	e5:SetCategory(CATEGORY_REMOVE+CATEGORY_ATKCHANGE)
-	e5:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
-	e5:SetCode(EVENT_PHASE+PHASE_STANDBY)
-	e5:SetRange(LOCATION_MZONE)
-	e5:SetCountLimit(1,id+3000000)
-	e5:SetCondition(s.atkcon)
-	e5:SetTarget(s.atktg)
-	e5:SetOperation(s.atkop)
-	c:RegisterEffect(e5)
 end
 
 s.listed_names={93717133} -- Galaxy-Eyes Photon Dragon
@@ -99,7 +88,7 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	if #g>0 and Duel.SendtoHand(g,nil,REASON_EFFECT)~=0 and g:GetFirst():IsLocation(LOCATION_HAND) then
 		Duel.ConfirmCards(1-tp,g)
 		if Duel.GetLocationCount(tp,LOCATION_MZONE)>0 and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_HAND,0,1,nil,e,tp)
-			and Duel.SelectYesNo(tp,aux.Stringid(id,4)) then
+			and Duel.SelectYesNo(tp,aux.Stringid(id,3)) then
 			Duel.BreakEffect()
 			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
 			local sg=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_HAND,0,1,1,nil,e,tp)
@@ -110,73 +99,53 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- 4. Global Board Negation & Name Manipulation Logic
-function s.distg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(aux.NOT(Xyz.NameconFilter),tp,LOCATION_MZONE,LOCATION_MZONE,1,e:GetHandler()) end
-end
-function s.disop(e,tp,eg,ep,ev,re,r,rp)
+-- 4. Battle Step Temporary Banish Logic
+function s.bcon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	local g=Duel.GetMatchingGroup(Card.IsFaceup,tp,LOCATION_MZONE,LOCATION_MZONE,c)
-	for tc in aux.Next(g) do
-		-- Negate Effects
-		Duel.NegateRelatedChain(tc,RESET_TURN_SET)
-		local e1=Effect.CreateEffect(c)
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_DISABLE)
-		e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_STANDBY+RESET_OPPO_TURN)
-		tc:RegisterEffect(e1)
-		local e2=Effect.CreateEffect(c)
-		e2:SetType(EFFECT_TYPE_SINGLE)
-		e2:SetCode(EFFECT_DISABLE_EFFECT)
-		e2:SetValue(RESET_TURN_SET)
-		e2:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_STANDBY+RESET_OPPO_TURN)
-		tc:RegisterEffect(e2)
-		-- Change Name to "Galaxy-Eyes"
-		local e3=Effect.CreateEffect(c)
-		e3:SetType(EFFECT_TYPE_SINGLE)
-		e3:SetCode(EFFECT_CHANGE_CODE)
-		e3:SetValue(0x107b) -- Note: Directly assigns "Galaxy-Eyes" setcode-ready identification identity string
-		e3:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_STANDBY+RESET_OPPO_TURN)
-		tc:RegisterEffect(e3)
-	end
+	-- Strictly verifies we are inside the Battle Step and battling an opponent's monster
+	return Duel.GetCurrentPhase()==PHASE_BATTLE_STEP and (Duel.GetAttacker()==c or Duel.GetAttackTarget()==c)
 end
-
--- 5. End Phase Control & Material Absorb Logic
-function s.xyzctlfilter(c)
-	return c:IsType(TYPE_XYZ) and c:IsControlerCanBeChanged()
-end
-function s.ctltg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(s.xyzctlfilter,tp,0,LOCATION_MZONE,1,nil) end
-	Duel.SetOperationInfo(0,CATEGORY_CONTROL,nil,1,1-tp,LOCATION_MZONE)
-end
-function s.ctlop(e,tp,eg,ep,ev,re,r,rp)
+function s.btg(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
-	if not c:IsRelateToEffect(e) then return end
-	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_CONTROL)
-	local g=Duel.SelectMatchingCard(tp,s.xyzctlfilter,tp,0,LOCATION_MZONE,1,1,nil)
-	local tc=g:GetFirst()
-	if tc and Duel.GetControl(tc,tp) then
-		local og=Duel.GetMatchingGroup(Card.IsCanOverlay,tp,0,LOCATION_MZONE,nil)
-		if #og>0 then
-			Duel.BreakEffect()
-			-- Standard EDOPro overlay function system handling safe attachment loops
-			local remg=Group.CreateGroup()
-			for oc in aux.Next(og) do
-				local overlay_g=oc:GetOverlayGroup()
-				if #overlay_g>0 then
-					Duel.SendtoGrave(overlay_g,REASON_RULE)
-				end
-				remg:AddCard(oc)
-			end
-			Duel.Overlay(tc,remg)
+	local tc=c:GetBattleTarget()
+	if chk==0 then return tc and tc:IsAbleToRemove() end
+	Duel.SetOperationInfo(0,CATEGORY_REMOVE,tc,1,0,0)
+end
+function s.bop(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	local tc=c:GetBattleTarget()
+	if tc and tc:IsRelateToBattle() and Duel.Remove(tc,POS_FACEUP,REASON_EFFECT)~=0 then
+		-- Apply Second Attack logic safely
+		if c:IsRelateToEffect(e) and c:IsFaceup() then
+			local e1=Effect.CreateEffect(c)
+			e1:SetType(EFFECT_TYPE_SINGLE)
+			e1:SetCode(EFFECT_EXTRA_ATTACK)
+			e1:SetValue(1)
+			e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_BATTLE)
+			c:RegisterEffect(e1)
 		end
+		-- Set up lingering return handler system to bring back the monster at the end of the Battle Phase
+		local e2=Effect.CreateEffect(c)
+		e2:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+		e2:SetCode(EVENT_PHASE+PHASE_BATTLE)
+		e2:SetCountLimit(1)
+		e2:SetLabelObject(tc)
+		e2:SetCondition(s.retcon)
+		e2:SetOperation(s.retop)
+		e2:SetReset(RESET_PHASE+PHASE_BATTLE)
+		Duel.RegisterEffect(e2,tp)
 	end
 end
-
--- 6. Standby Phase Banish & ATK Pump Logic
-function s.atkcon(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.GetTurnPlayer()==tp
+function s.retcon(e,tp,eg,ep,ev,re,r,rp)
+	local tc=e:GetLabelObject()
+	return tc and tc:IsLocation(LOCATION_REMOVED)
 end
+function s.retop(e,tp,eg,ep,ev,re,r,rp)
+	local tc=e:GetLabelObject()
+	Duel.ReturnToField(tc)
+end
+
+-- 5. End Phase Banish & ATK Pump Logic
 s.rmfilter=aux.FilterBoolFunction(Card.IsType,TYPE_XYZ)
 function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.rmfilter,tp,LOCATION_GRAVE,0,1,nil) end
@@ -187,7 +156,7 @@ function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,s.rmfilter,tp,LOCATION_GRAVE,0,1,99,nil)
 	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)~=0 then
-		-- Count current number of your Xyz monsters in the banishment field space total
+		-- Counts total Xyz monsters currently residing face-up in your banishment
 		local ct=Duel.GetMatchingGroupCount(function(bc) return bc:IsType(TYPE_XYZ) and bc:IsFaceup() end,tp,LOCATION_REMOVED,0,nil)
 		if ct>0 and c:IsRelateToEffect(e) and c:IsFaceup() then
 			local e1=Effect.CreateEffect(c)
