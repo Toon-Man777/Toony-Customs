@@ -12,10 +12,10 @@ function s.initial_effect(c)
 	e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
 	e1:SetCode(EFFECT_CHANGE_CODE)
 	e1:SetRange(LOCATION_FZONE)
-	e1:SetValue(24878656) -- UPDATED: Toy Box Card ID
+	e1:SetValue(24878656) -- Toy Box Card ID
 	c:RegisterEffect(e1)
 
-	-- Effect 2: While on the field, your set cards cannot be targeted by opponent's card effects
+	-- Effect 2: Your Continuous Spell cards cannot be targeted by opponent's card effects
 	local e2=Effect.CreateEffect(c)
 	e2:SetType(EFFECT_TYPE_FIELD)
 	e2:SetCode(EFFECT_CANNOT_BE_EFFECT_TARGET)
@@ -25,77 +25,86 @@ function s.initial_effect(c)
 	e2:SetValue(aux.tgovval)
 	c:RegisterEffect(e2)
 
-	-- Effect 3: Once per turn: Destroy 1 Set card in your S&T Zone to add 1 "Toy Box" from Deck to hand
+	-- Effect 3: Destroy 1 Set card on your field, then destroy 1 card on the field
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,0))
-	e3:SetCategory(CATEGORY_DESTROY+CATEGORY_TOHAND+CATEGORY_SEARCH)
+	e3:SetCategory(CATEGORY_DESTROY)
 	e3:SetType(EFFECT_TYPE_IGNITION)
+	e3:SetProperty(EFFECT_FLAG_CARD_TARGET)
 	e3:SetRange(LOCATION_FZONE)
-	e3:SetCountLimit(1)
-	e3:SetTarget(s.th_target)
-	e3:SetOperation(s.th_operation)
+	e3:SetTarget(s.des_target)
+	e3:SetOperation(s.des_operation)
 	c:RegisterEffect(e3)
 
-	-- Effect 4: While you control 3 "Toy" set cards in your S&T Zone, draw 1 card
+	-- Effect 4: While you control 3 set cards in your Spell/Trap zone, draw 1 card
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,1))
 	e4:SetCategory(CATEGORY_DRAW)
 	e4:SetType(EFFECT_TYPE_IGNITION)
 	e4:SetRange(LOCATION_FZONE)
-	e4:SetCountLimit(1,id) 
+	e4:SetCountLimit(1,id) -- Hard once per turn shared naming clause
 	e4:SetCondition(s.draw_condition)
 	e4:SetTarget(s.draw_target)
 	e4:SetOperation(s.draw_operation)
 	c:RegisterEffect(e4)
 end
 
-s.listed_names={24878656} -- UPDATED: Toy Box Card ID
+s.listed_names={24878656} -- Toy Box Card ID
 
-function s.toy_filter(c)
-	return c:IsSetCard(0x1a0) or string.find(c:GetOriginalName() or "","Toy")~=nil
-end
-function s.set_toy_st_filter(c)
-	return c:IsFacedown() and c:IsLocation(LOCATION_SZONE) and s.toy_filter(c)
-end
-
--- EFFECT 2
+-- Effect 2: Continuous Spell filter protection
 function s.tg_protection(e,c)
-	return c:IsFacedown() and c:IsControler(e:GetHandlerPlayer())
+	return c:IsType(TYPE_SPELL+TYPE_CONTINUOUS) and c:IsControler(e:GetHandlerPlayer())
 end
 
--- EFFECT 3 Search
-function s.toybox_search_filter(c)
-	return c:IsCode(24878656) and c:IsAbleToHand() -- UPDATED: Toy Box ID
-end
-function s.th_target(e,tp,eg,ep,ev,re,r,rp,chk)
-	local g=Duel.GetMatchingGroup(Card.IsFacedown,tp,LOCATION_SZONE,0,nil)
-	if chk==0 then return #g>0 and Duel.IsExistingMatchingCard(s.toybox_search_filter,tp,LOCATION_DECK,0,1,nil) end
-	Duel.SetOperationInfo(0,CATEGORY_DESTROY,nil,1,tp,LOCATION_SZONE)
-	Duel.SetOperationInfo(0,CATEGORY_TOHAND,nil,1,tp,LOCATION_DECK)
-end
-function s.th_operation(e,tp,eg,ep,ev,re,r,rp)
+-- Effect 3 Handlers: Target 1 of your own Set cards + 1 card anywhere on the field
+function s.des_target(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+	if chkc then return false end -- Handled manually below due to dual target requirements
+	if chk==0 then 
+		return Duel.IsExistingTarget(Card.IsFacedown,tp,LOCATION_ONFIELD,0,1,nil)
+			and Duel.IsExistingTarget(nil,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,nil)
+	end
+	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)
-	local g=Duel.SelectMatchingCard(tp,Card.IsFacedown,tp,LOCATION_SZONE,0,1,1,nil)
-	if #g>0 and Duel.Destroy(g,REASON_EFFECT)~=0 then
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_ATOHAND)
-		local sg=Duel.SelectMatchingCard(tp,s.toybox_search_filter,tp,LOCATION_DECK,0,1,1,nil)
-		if #sg>0 then
-			Duel.SendtoHand(sg,nil,REASON_EFFECT)
-			Duel.ConfirmCards(1-tp,sg)
+	local g1=Duel.SelectTarget(tp,Card.IsFacedown,tp,LOCATION_ONFIELD,0,1,1,nil)
+	e:SetLabelObject(g1:GetFirst())
+	
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)
+	-- Filters out the first target to make sure you can't choose the exact same card twice
+	local g2=Duel.SelectTarget(tp,nil,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,1,g1:GetFirst()) 
+	
+	local g=Group.FromCards(g1:GetFirst(),g2:GetFirst())
+	Duel.SetOperationInfo(0,CATEGORY_DESTROY,g,2,0,0)
+end
+
+function s.des_operation(e,tp,eg,ep,ev,re,r,rp)
+	local tc1=e:GetLabelObject()
+	-- Re-find second target from current chain targets
+	local tg=Duel.GetTargetCards(e)
+	if #tg<2 then return end
+	local tc2=tg:IsContains(tc1) and tg:Filter(function(c) return c~=tc1 end,nil):GetFirst() or nil
+	
+	-- Destroy 1 set card on your field
+	if tc1 and tc1:IsRelateToEffect(e) and Duel.Destroy(tc1,REASON_EFFECT)~=0 then
+		-- Then you can destroy 1 card on the field
+		if tc2 and tc2:IsRelateToEffect(e) then
+			Duel.Destroy(tc2,REASON_EFFECT)
 		end
 	end
 end
 
--- EFFECT 4
+-- Effect 4 Handlers: 3 generic face-down cards in S&T zone to draw 1
 function s.draw_condition(e,tp,eg,ep,ev,re,r,rp)
-	return Duel.IsExistingMatchingCard(s.set_toy_st_filter,tp,LOCATION_SZONE,0,3,nil)
+	local g=Duel.GetMatchingGroup(Card.IsFacedown,tp,LOCATION_SZONE,0,nil)
+	return #g>=3
 end
+
 function s.draw_target(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsPlayerCanDraw(tp,1) end
 	Duel.SetTargetPlayer(tp)
 	Duel.SetTargetParam(1)
 	Duel.SetOperationInfo(0,CATEGORY_DRAW,nil,0,tp,1)
 end
+
 function s.draw_operation(e,tp,eg,ep,ev,re,r,rp)
 	local p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)
 	Duel.Draw(p,d,REASON_EFFECT)
