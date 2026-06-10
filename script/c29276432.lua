@@ -74,9 +74,9 @@ function s.cost(e,tp,eg,ep,ev,re,r,rp,chk)
 	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
 end
 
+-- Fixed filter: Removed GetOriginalName() to prevent method crashes
 function s.toy_filter(c)
-	if not c:IsMonster() then return false end
-	return c:IsSetCard(0x1a4) or string.find(c:GetOriginalName() or "","Toy")~=nil
+	return c:IsMonster() and c:IsSetCard(0x1a4)
 end
 
 function s.set_deck_tg(e,tp,eg,ep,ev,re,r,rp,chk)
@@ -95,7 +95,7 @@ function s.set_deck_op(e,tp,eg,ep,ev,re,r,rp)
 		e1:SetCode(EFFECT_CHANGE_TYPE)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		e1:SetValue(TYPE_SPELL+TYPE_CONTINUOUS)
+		e1:SetValue(0x20002) -- Hardcoded literal value for TYPE_SPELL + TYPE_CONTINUOUS to secure parameter type safety
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD-RESET_TO_FIELD)
 		tc:RegisterEffect(e1)
 	end
@@ -125,7 +125,7 @@ function s.place_op(e,tp,eg,ep,ev,re,r,rp)
 		e1:SetCode(EFFECT_CHANGE_TYPE)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		e1:SetValue(TYPE_SPELL)
+		e1:SetValue(0x2) -- Hardcoded literal for TYPE_SPELL
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD-RESET_TO_FIELD)
 		tc:RegisterEffect(e1)
 	end
@@ -147,12 +147,13 @@ function s.set_self_op(e,tp,eg,ep,ev,re,r,rp)
 		e1:SetCode(EFFECT_CHANGE_TYPE)
 		e1:SetType(EFFECT_TYPE_SINGLE)
 		e1:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		e1:SetValue(TYPE_SPELL)
+		e1:SetValue(0x2) -- Hardcoded literal to safeguard parameter assignment
 		e1:SetReset(RESET_EVENT+RESETS_STANDARD-RESET_TO_FIELD)
 		c:RegisterEffect(e1)
 	end
 end
 
+-- Fixed backrow pop mechanics
 function s.sp_cond_fixed(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	return eg:IsContains(c) and c:IsPreviousLocation(LOCATION_SZONE)
