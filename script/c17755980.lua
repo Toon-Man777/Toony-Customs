@@ -22,8 +22,11 @@ function s.initial_effect(c)
 	e2:SetDescription(aux.Stringid(id,0))
 	e2:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH+CATEGORY_SPECIAL_SUMMON)
 	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
-	e2:SetCode(EVENT_SXYZ_SUMMON)
+	-- FIXED: Changed from EVENT_SXYZ_SUMMON to EVENT_SPSUMMON to fix the nil 'SetCode' crash
+	e2:SetCode(EVENT_SPSUMMON)
+	e2:SetProperty(EFFECT_FLAG_DELAY)
 	e2:SetCountLimit(1,id) -- Hard once per turn
+	e2:SetCondition(s.th_sp_cond) -- Conditions it strictly to Xyz Summons
 	e2:SetTarget(s.th_sp_tg)
 	e2:SetOperation(s.th_sp_op)
 	c:RegisterEffect(e2)
@@ -56,7 +59,6 @@ function s.initial_effect(c)
 	c:RegisterEffect(e4)
 end
 
--- Official database codes for archetypes and named card
 s.listed_names={93717133} -- "Galaxy-Eyes Photon Dragon"
 s.listed_series={0x7b,0x93,0xe1} -- Galaxy (0x7b), Photon (0x93), Cipher (0xe1)
 
@@ -66,6 +68,11 @@ function s.imm_cond(e)
 end
 function s.imm_val(e,te)
 	return te:GetOwnerPlayer()~=e:GetHandlerPlayer()
+end
+
+-- Condition to make sure it was Xyz Summoned safely
+function s.th_sp_cond(e,tp,eg,ep,ev,re,r,rp)
+	return e:GetHandler():IsSummonType(SUMMON_TYPE_XYZ)
 end
 
 -- Filter for searching "Galaxy", "Photon", or "Cipher" monsters
@@ -104,7 +111,6 @@ end
 
 -- Effect 2 Handlers (Battle Step Banish and Second Attack)
 function s.ban_cond(e,tp,eg,ep,ev,re,r,rp)
-	-- Must be in the Battle Step, and this card must be the one battling
 	return Duel.GetCurrentPhase()==PHASE_BATTLE_STEP and Duel.GetAttacker() and (Duel.GetAttacker()==e:GetHandler() or Duel.GetAttackTarget()==e:GetHandler())
 end
 function s.ban_tg(e,tp,eg,ep,ev,re,r,rp,chk)
@@ -116,7 +122,6 @@ function s.ban_op(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	local bc=c:GetBattleMonster()
 	if bc and bc:IsControler(1-tp) and Duel.Remove(bc,POS_FACEUP,REASON_EFFECT)~=0 then
-		-- Gain a second attack
 		if c:IsRelateToEffect(e) and c:IsFaceup() then
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_SINGLE)
@@ -126,7 +131,6 @@ function s.ban_op(e,tp,eg,ep,ev,re,r,rp)
 			e1:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_BATTLE)
 			c:RegisterEffect(e1)
 		end
-		-- Return the banished monster to opponent's field at the end of the Battle Phase
 		if bc:IsLocation(LOCATION_REMOVED) then
 			local e2=Effect.CreateEffect(c)
 			e2:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
@@ -162,16 +166,14 @@ end
 function s.atk_op(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
-	-- Player chooses any number of Xyz monsters to banish from GY
 	local g=Duel.SelectMatchingCard(tp,s.atk_gy_filter,tp,LOCATION_GRAVE,0,1,60,nil)
 	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)~=0 then
-		-- Count all Xyz monsters in the banished zones globally
 		local count=Duel.GetMatchingGroupCount(s.atk_ban_filter,tp,LOCATION_REMOVED,LOCATION_REMOVED,nil)
 		if count>0 and c:IsRelateToEffect(e) and c:IsFaceup() then
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_SINGLE)
 			e1:SetCode(EFFECT_UPDATE_ATTACK)
-			e1:SetValue(count*500) -- Gains 500 ATK for each
+			e1:SetValue(count*500)
 			e1:SetReset(RESET_EVENT+RESETS_STANDARD_DISABLE)
 			c:RegisterEffect(e1)
 		end

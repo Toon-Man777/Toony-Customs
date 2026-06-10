@@ -60,14 +60,13 @@ function s.initial_effect(c)
 	c:RegisterEffect(e5)
 end
 
-s.listed_names={24878656} -- Corrected "Toy Box" database ID
+s.listed_names={24878656} -- UPDATED: Toy Box Card ID
 
--- Xyz Material Filter
 function s.xyzfilter(c,xyz,sumtype,tp)
 	return c:IsSetCard(0x1a0) or string.find(c:GetOriginalName() or "","Toy")~=nil
 end
 
--- EFFECT 1 HANDLERS (Destroy Set card to gain 500 ATK)
+-- EFFECT 1
 function s.des_target(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return true end
 	local g=Duel.GetMatchingGroup(Card.IsFacedown,tp,LOCATION_ONFIELD,0,nil)
@@ -87,7 +86,7 @@ function s.des_operation(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- EFFECT 2 HANDLERS (Leave Field Replace with Detach)
+-- EFFECT 2
 function s.rep_target(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
 	if chk==0 then return c:IsReason(REASON_DESTROY+REASON_RELEASE+REASON_BANISH+REASON_TOGRAVE+REASON_TOHAND+REASON_TODECK) 
@@ -99,7 +98,7 @@ function s.rep_target(e,tp,eg,ep,ev,re,r,rp,chk)
 	return false
 end
 
--- EFFECT 3 HANDLERS (Set self to S&T Zone on destruction)
+-- EFFECT 3
 function s.set_self_tg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0 end
 end
@@ -117,7 +116,7 @@ function s.set_self_op(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- EFFECT 4 HANDLERS (Special Summon from S&T zone destruction)
+-- EFFECT 4
 function s.sp_cond(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():IsPreviousLocation(LOCATION_SZONE)
 end
@@ -134,9 +133,9 @@ function s.sp_op(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- EFFECT 5 HANDLERS (Toy Box Protection)
+-- EFFECT 5 (Protection)
 function s.toybox_filter(c)
-	return c:IsFaceup() and c:IsCode(24878656)
+	return c:IsFaceup() and c:IsCode(24878656) -- UPDATED: Toy Box ID
 end
 function s.prot_cond(e)
 	return Duel.IsExistingMatchingCard(s.toybox_filter,e:GetHandlerPlayer(),LOCATION_ONFIELD,0,1,nil)

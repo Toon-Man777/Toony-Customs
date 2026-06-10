@@ -1,104 +1,99 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Xyz Summon Procedure: 2+ Level 1 Fairy monsters
-	Xyz.AddProcedure(c,s.xyzfilter,1,2,nil,nil,99)
+	-- Xyz Summon Procedure: 2+ Level 1 Monsters
+	-- FIXED: Changed the old max material value '99' to 'Xyz.InfiniteMats' to stop the crash
+	Xyz.AddProcedure(c,nil,1,2,nil,nil,Xyz.InfiniteMats)
 	c:EnableReviveLimit()
 
-	-- Effect 1: Treated as "Mokey Mokey" while on the field or in the GY
+	-- Effect 1: Gains 300 ATK/DEF for each material attached
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_SINGLE)
+	e1:SetCode(EFFECT_UPDATE_ATTACK)
 	e1:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
-	e1:SetCode(EFFECT_CHANGE_CODE)
-	e1:SetRange(LOCATION_MZONE+LOCATION_GRAVE)
-	e1:SetValue(27288416) -- Original "Mokey Mokey" card code
+	e1:SetRange(LOCATION_MZONE)
+	e1:SetValue(s.atkval)
 	c:RegisterEffect(e1)
-
-	-- Effect 2: You take no battle damage involving this card
-	local e2=Effect.CreateEffect(c)
-	e2:SetType(EFFECT_TYPE_SINGLE)
-	e2:SetCode(EFFECT_AVOID_BATTLE_DAMAGE)
-	e2:SetValue(1)
+	local e2=e1:Clone()
+	e2:SetCode(EFFECT_UPDATE_DEFENSE)
 	c:RegisterEffect(e2)
 
-	-- Effect 3: ATK/DEF multiplies for each Xyz material attached
+	-- Effect 2: Detach 1 material; target 1 "Mokey Mokey" in GY and attach it as material
 	local e3=Effect.CreateEffect(c)
-	e3:SetType(EFFECT_TYPE_SINGLE)
-	e3:SetCode(EFFECT_SET_ATTACK_FINAL)
-	e3:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
+	e3:SetDescription(aux.Stringid(id,0))
+	e3:SetType(EFFECT_TYPE_IGNITION)
 	e3:SetRange(LOCATION_MZONE)
-	e3:SetValue(s.statval)
+	e3:SetCountLimit(1,id)
+	e3:SetCost(aux.xyzcost)
+	e3:SetTarget(s.att_tg)
+	e3:SetOperation(s.att_op)
 	c:RegisterEffect(e3)
-	local e4=e3:Clone()
-	e4:SetCode(EFFECT_SET_DEFENSE_FINAL)
+
+	-- Effect 3: If this card with material is destroyed: Special Summon "Mokey Mokey" tokens up to the number of materials it had
+	local e4=Effect.CreateEffect(c)
+	e4:SetDescription(aux.Stringid(id,1))
+	e4:SetCategory(CATEGORY_SPECIAL_SUMMON+CATEGORY_TOKEN)
+	e4:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
+	e4:SetProperty(EFFECT_FLAG_DELAY)
+	e4:SetCode(EVENT_DESTROYED)
+	e4:SetCountLimit(1,id+100)
+	e4:SetCondition(s.tok_cond)
+	e4:SetTarget(s.tok_tg)
+	e4:SetOperation(s.tok_op)
 	c:RegisterEffect(e4)
-
-	-- Effect 4: Once per turn: Detach 1 material to draw 1 card, then attach 1 "Mokey Mokey"
-	local e5=Effect.CreateEffect(c)
-	e5:SetDescription(aux.Stringid(id,0))
-	e5:SetCategory(CATEGORY_DRAW)
-	e5:SetType(EFFECT_TYPE_IGNITION)
-	e5:SetRange(LOCATION_MZONE)
-	e5:SetCountLimit(1)
-	e5:SetCost(s.drcost)
-	e5:SetTarget(s.drtg)
-	e5:SetOperation(s.drop)
-	c:RegisterEffect(e5)
 end
 
-s.listed_names={27288416} -- "Mokey Mokey"
-s.listed_series={0x184}   -- Mokey Mokey Archetype
+s.listed_names={27288416,579471963} -- Mokey Mokey, Mokey Mokey Token ID
 
--- Xyz Materials Filter
-function s.xyzfilter(c,xyzc,sumtype,tp)
-	return c:IsRace(RACE_FAIRY,xyzc,sumtype,tp)
-end
-
--- Updated Stat Multiplication Logic (Total Xyz Material Count)
-function s.statval(e,c)
-	local base_atk = 600
-	local base_def = 200
-	local count = c:GetOverlayCount() -- Now cleanly checks total materials attached
-	
-	if count == 0 then 
-		return e:GetCode() == EFFECT_SET_ATTACK_FINAL and base_atk or base_def
-	end
-	
-	if e:GetCode() == EFFECT_SET_ATTACK_FINAL then
-		return base_atk * count
-	else
-		return base_def * count
-	end
+-- ATK/DEF Calculation based on materials
+function s.atkval(e,c)
+	return c:GetOverlayCount()*300
 end
 
--- Detach, Draw, and Re-attach Handlers
-function s.drcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_COST) end
-	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
+-- Filter for identifying valid "Mokey Mokey" targets in the GY
+function s.att_filter(c)
+	return (c:IsCode(27288416) or string.find(c:GetOriginalName() or "","Mokey Mokey")~=nil) and c:IsMonster()
 end
-function s.drtg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsPlayerCanDraw(tp,1) end
-	Duel.SetTargetPlayer(tp)
-	Duel.SetTargetParam(1)
-	Duel.SetOperationInfo(0,CATEGORY_DRAW,nil,0,tp,1)
+
+-- Effect 2 Handlers (Attach from GY)
+function s.att_tg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+	if chkc then return chkc:IsLocation(LOCATION_GRAVE) and chkc:IsControler(tp) and s.att_filter(chkc) end
+	if chk==0 then return e:GetHandler():IsType(TYPE_XYZ) 
+		and Duel.IsExistingTarget(s.att_filter,tp,LOCATION_GRAVE,0,1,nil) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TARGET)
+	Duel.SelectTarget(tp,s.att_filter,tp,LOCATION_GRAVE,0,1,1,nil)
 end
-function s.attfilter(c)
-	return c:IsCode(27288416) or c:IsSetCard(0x184)
-end
-function s.drop(e,tp,eg,ep,ev,re,r,rp)
-	local p,d=Duel.GetChainInfo(0,CHAININFO_TARGET_PLAYER,CHAININFO_TARGET_PARAM)
+function s.att_op(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	
-	-- Draw 1 card
-	if Duel.Draw(p,d,REASON_EFFECT) > 0 and c:IsRelateToEffect(e) and c:IsFaceup() then
-		-- Optional: Attach 1 "Mokey Mokey" card from hand
-		local g=Duel.GetMatchingGroup(s.attfilter,tp,LOCATION_HAND,0,nil)
-		if #g > 0 and Duel.SelectYesNo(tp,aux.Stringid(id,1)) then
-			Duel.BreakEffect()
-			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_XMATERIAL)
-			local sg=g:Select(tp,1,1,nil)
-			if #sg > 0 then
-				Duel.Overlay(c,sg)
-			end
-		end
+	local tc=Duel.GetFirstTarget()
+	if c:IsRelateToEffect(e) and tc and tc:IsRelateToEffect(e) then
+		Duel.Overlay(c,tc)
 	end
+end
+
+-- Effect 3 Handlers (Token generation on destruction)
+function s.tok_cond(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	return c:IsReason(REASON_DESTROY) and c:GetBanishParam()~=0 or c:GetPreviousOverlayCount()>0
+end
+function s.tok_tg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then
+		local ct=e:GetHandler():GetPreviousOverlayCount()
+		return ct>0 and Duel.GetLocationCount(tp,LOCATION_MZONE)>=ct
+			and Duel.IsPlayerCanSpecialSummonMonster(tp,579471963,0,TYPES_TOKEN,0,0,1,RACE_FAIRY,ATTRIBUTE_LIGHT)
+	end
+	local ct=e:GetHandler():GetPreviousOverlayCount()
+	Duel.SetOperationInfo(0,CATEGORY_TOKEN,nil,ct,0,0)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,ct,tp,0)
+end
+function s.tok_op(e,tp,eg,ep,ev,re,r,rp)
+	local c=e:GetHandler()
+	local ct=c:GetPreviousOverlayCount()
+	if ct<=0 or Duel.GetLocationCount(tp,LOCATION_MZONE)<ct then return end
+	if not Duel.IsPlayerCanSpecialSummonMonster(tp,579471963,0,TYPES_TOKEN,0,0,1,RACE_FAIRY,ATTRIBUTE_LIGHT) then return end
+	
+	for i=1,ct do
+		local token=Duel.CreateToken(tp,579471963)
+		Duel.SpecialSummonStep(token,0,tp,tp,false,false,POS_FACEUP)
+	end
+	Duel.SpecialSummonComplete()
 end
