@@ -25,7 +25,7 @@ function s.initial_effect(c)
 	e2:SetValue(aux.tgovval)
 	c:RegisterEffect(e2)
 
-	-- Effect 3: Destroy 1 Set card on your field, then destroy 1 card on the field
+	-- Effect 3: Destroy 1 Set card on your field, then you can destroy 1 card on the field
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,0))
 	e3:SetCategory(CATEGORY_DESTROY)
@@ -51,16 +51,15 @@ end
 
 s.listed_names={24878656} -- Toy Box Card ID
 
--- Effect 2: Protection for Continuous Spells
+-- Effect 2 Protection
 function s.tg_protection(e,c)
 	return c:IsType(TYPE_SPELL+TYPE_CONTINUOUS) and c:IsControler(e:GetHandlerPlayer())
 end
 
--- Effect 3 Handlers: FIXED target logic to pass validation even if opponent field is empty
+-- Effect 3 Clean Handlers
 function s.des_target(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	if chkc then return false end
 	if chk==0 then 
-		-- Only strictly require 1 face-down card to start activation
 		return Duel.IsExistingTarget(Card.IsFacedown,tp,LOCATION_ONFIELD,0,1,nil)
 	end
 	
@@ -68,9 +67,8 @@ function s.des_target(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	local g1=Duel.SelectTarget(tp,Card.IsFacedown,tp,LOCATION_ONFIELD,0,1,1,nil)
 	e:SetLabelObject(g1:GetFirst())
 	
-	-- Check if there's *another* card on the field to target for destruction
 	local g2=Duel.GetMatchingGroup(nil,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,g1:GetFirst())
-	if #g2>0 then
+	if #g2>0 and Duel.SelectYesNo(tp,aux.Stringid(id,2)) then
 		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_DESTROY)
 		local g3=Duel.SelectTarget(tp,nil,tp,LOCATION_ONFIELD,LOCATION_ONFIELD,1,1,g1:GetFirst())
 		g1:Merge(g3)
@@ -84,19 +82,17 @@ function s.des_operation(e,tp,eg,ep,ev,re,r,rp)
 	local tg=Duel.GetTargetCards(e)
 	if not tc1 or not tc1:IsRelateToEffect(e) then return end
 	
-	-- Isolate the second target (if one was successfully selected)
 	local tc2=tg:Filter(function(c) return c~=tc1 end,nil):GetFirst()
 	
-	-- Destroy 1 set card on your field
 	if Duel.Destroy(tc1,REASON_EFFECT)~=0 then
-		-- Then you can destroy 1 card on the field
 		if tc2 and tc2:IsRelateToEffect(e) then
+			Duel.BreakEffect()
 			Duel.Destroy(tc2,REASON_EFFECT)
 		end
 	end
 end
 
--- Effect 4 Handlers: Draw
+-- Effect 4 Draw Handlers
 function s.draw_condition(e,tp,eg,ep,ev,re,r,rp)
 	local g=Duel.GetMatchingGroup(Card.IsFacedown,tp,LOCATION_SZONE,0,nil)
 	return #g>=3

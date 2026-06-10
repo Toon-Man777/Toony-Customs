@@ -28,28 +28,28 @@ function s.initial_effect(c)
 	e2:SetOperation(s.place_op)
 	c:RegisterEffect(e2)
 
-	-- Effect 3: When this card is destroyed, you can set this card in your Spell/Trap zone
+	-- Effect 3: When this card is destroyed, set this card in your Spell/Trap zone
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,2))
 	e3:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
 	e3:SetProperty(EFFECT_FLAG_DELAY)
 	e3:SetCode(EVENT_DESTROYED)
 	e3:SetCountLimit(1,id+200)
-	e3:SetCondition(s.set_self_cond) -- Ensures it was destroyed from a Monster/Hand zone, not S&T
+	e3:SetCondition(s.set_self_cond)
 	e3:SetTarget(s.set_self_tg)
 	e3:SetOperation(s.set_self_op)
 	c:RegisterEffect(e3)
 
-	-- Effect 4: FIXED - Special Summon itself when destroyed while in the Spell/Trap zone
+	-- Effect 4: Special Summon itself when destroyed while in the Spell/Trap zone
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,3))
 	e4:SetCategory(CATEGORY_SPECIAL_SUMMON)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
 	e4:SetProperty(EFFECT_FLAG_DELAY)
 	e4:SetCode(EVENT_DESTROYED)
-	e4:SetRange(LOCATION_GRAVE+LOCATION_REMOVED) -- Checks wherever the card lands after being popped
+	e4:SetRange(LOCATION_GRAVE+LOCATION_REMOVED)
 	e4:SetCountLimit(1,id+300)
-	e4:SetCondition(s.sp_cond_fixed) -- Rewritten to securely track its backrow heritage
+	e4:SetCondition(s.sp_cond_fixed)
 	e4:SetTarget(s.sp_tg_fixed)
 	e4:SetOperation(s.sp_op_fixed)
 	c:RegisterEffect(e4)
@@ -69,7 +69,6 @@ end
 
 s.listed_names={24878656} -- Toy Box Card ID
 
--- Cost handler
 function s.cost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_COST) end
 	e:GetHandler():RemoveOverlayCard(tp,1,1,REASON_COST)
@@ -80,11 +79,11 @@ function s.toy_filter(c)
 	return c:IsSetCard(0x1a4) or string.find(c:GetOriginalName() or "","Toy")~=nil
 end
 
--- Effect 1
 function s.set_deck_tg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0
 		and Duel.IsExistingMatchingCard(s.toy_filter,tp,LOCATION_DECK,0,1,nil) end
 end
+
 function s.set_deck_op(e,tp,eg,ep,ev,re,r,rp)
 	if Duel.GetLocationCount(tp,LOCATION_SZONE)<=0 then return end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOFIELD)
@@ -102,13 +101,14 @@ function s.set_deck_op(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 2
 function s.cfilter(c)
 	return c:IsPreviousPosition(POS_FACEDOWN) and c:IsPreviousLocation(LOCATION_ONFIELD)
 end
+
 function s.place_cond(e,tp,eg,ep,ev,re,r,rp)
 	return eg:IsExists(s.cfilter,1,nil)
 end
+
 function s.place_tg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	if chkc then return chkc:IsLocation(LOCATION_MZONE) end
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0
@@ -116,6 +116,7 @@ function s.place_tg(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TARGET)
 	Duel.SelectTarget(tp,Card.IsMonster,tp,LOCATION_MZONE,LOCATION_MZONE,1,1,nil)
 end
+
 function s.place_op(e,tp,eg,ep,ev,re,r,rp)
 	local tc=Duel.GetFirstTarget()
 	if tc and tc:IsRelateToEffect(e) and Duel.GetLocationCount(tp,LOCATION_SZONE)>0 then
@@ -130,14 +131,14 @@ function s.place_op(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 3
 function s.set_self_cond(e,tp,eg,ep,ev,re,r,rp)
-	-- Only lets you set it if it was NOT destroyed in the S&T Zone (prevents effect overlapping)
 	return not e:GetHandler():IsPreviousLocation(LOCATION_SZONE)
 end
+
 function s.set_self_tg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_SZONE)>0 end
 end
+
 function s.set_self_op(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if c:IsRelateToEffect(e) and Duel.GetLocationCount(tp,LOCATION_SZONE)>0 then
@@ -152,18 +153,18 @@ function s.set_self_op(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- FIXED Effect 4 Handlers: Secures validation checking from the Spell/Trap Zone
 function s.sp_cond_fixed(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
-	-- Filters through the global trigger group to find itself and make sure it lived in S&T before pop
 	return eg:IsContains(c) and c:IsPreviousLocation(LOCATION_SZONE)
 end
+
 function s.sp_tg_fixed(e,tp,eg,ep,ev,re,r,rp,chk)
 	local c=e:GetHandler()
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
 		and c:IsCanBeSpecialSummoned(e,0,tp,false,false) end
 	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,c,1,0,0)
 end
+
 function s.sp_op_fixed(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	if c:IsRelateToEffect(e) then
@@ -171,10 +172,10 @@ function s.sp_op_fixed(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 5
 function s.toybox_filter(c)
 	return c:IsFaceup() and c:IsCode(24878656)
 end
+
 function s.prot_cond(e)
 	return Duel.IsExistingMatchingCard(s.toybox_filter,e:GetHandlerPlayer(),LOCATION_ONFIELD,0,1,nil)
 end
