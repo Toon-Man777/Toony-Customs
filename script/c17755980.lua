@@ -38,7 +38,7 @@ function s.initial_effect(c)
 	e3:SetCode(EVENT_FREE_CHAIN)
 	e3:SetRange(LOCATION_MZONE)
 	e3:SetCountLimit(1,id+100) -- Hard Once Per Turn
-	-- Fixed SetHintTiming crash explicitly for your engine
+	-- Universal 2-integer bitmask to prevent parameter 2 "nil" crashes completely
 	e3:SetHintTiming(0,TIMING_BATTLE_PHASE)
 	e3:SetCondition(s.bancon)
 	e3:SetCost(s.bancost)
@@ -121,7 +121,7 @@ function s.banop(e,tp,eg,ep,ev,re,r,rp)
 	local bc=c:GetBattleTarget()
 	if bc and bc:IsRelateToBattle() and Duel.Remove(bc,POS_FACEUP,REASON_EFFECT)>0 then
 		if bc:IsLocation(LOCATION_REMOVED) then
-			-- Track returning the card safely at the end of the Battle Phase
+			-- System hook to safely return the monster at the end of the Battle Phase
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 			e1:SetCode(EVENT_PHASE+PHASE_BATTLE)
@@ -132,7 +132,7 @@ function s.banop(e,tp,eg,ep,ev,re,r,rp)
 			e1:SetReset(RESET_PHASE+PHASE_BATTLE)
 			Duel.RegisterEffect(e1,tp)
 		end
-		-- Allow second attack
+		-- Grant a second attack
 		if c:IsRelateToEffect(e) and c:IsFaceup() then
 			local e2=Effect.CreateEffect(c)
 			e2:SetType(EFFECT_TYPE_SINGLE)
@@ -155,7 +155,7 @@ function s.retop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 4 (End Phase ATK Gain setup)
+-- Effect 4 (End Phase Multi-Banish ATK Booster)
 function s.xyzgyfilter(c)
 	return c:IsType(TYPE_XYZ) and c:IsAbleToRemove()
 end
@@ -172,7 +172,7 @@ function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local g=Duel.SelectMatchingCard(tp,s.xyzgyfilter,tp,LOCATION_GRAVE,0,1,99,nil)
 	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)>0 then
 		if c:IsRelateToEffect(e) and c:IsFaceup() then
-			-- Tracks total ATK gain from all face-up Xyz cards in the Banished Zone
+			-- Counts total face-up Xyz Monsters across both player's banished zones
 			local ct=Duel.GetMatchingGroupCount(s.xyzbanfilter,tp,LOCATION_REMOVED,LOCATION_REMOVED,nil)
 			if ct>0 then
 				Duel.BreakEffect()
