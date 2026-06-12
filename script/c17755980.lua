@@ -24,7 +24,7 @@ function s.initial_effect(c)
 	e2:SetType(EFFECT_TYPE_SINGLE+EFFECT_TYPE_TRIGGER_O)
 	e2:SetCode(EVENT_SPSUMMON_SUCCESS)
 	e2:SetProperty(EFFECT_FLAG_DELAY)
-	e2:SetCountLimit(1,id)
+	e2:SetCountLimit(1,id) -- Hard Once Per Turn
 	e2:SetCondition(s.thcon)
 	e2:SetTarget(s.thtg)
 	e2:SetOperation(s.thop)
@@ -37,31 +37,31 @@ function s.initial_effect(c)
 	e3:SetType(EFFECT_TYPE_QUICK_O)
 	e3:SetCode(EVENT_FREE_CHAIN)
 	e3:SetRange(LOCATION_MZONE)
-	e3:SetCountLimit(1,id+100)
-	-- Line 41 Fix: Standardizing both inputs to integers to solve the parameter 2 nil crash
-	e3:SetHintTiming(TIMING_BATTLE_PHASE,TIMING_BATTLE_PHASE)
+	e3:SetCountLimit(1,id+100) -- Hard Once Per Turn
+	-- Fixed SetHintTiming crash by providing exact explicit dual-integer constants
+	e3:SetHintTiming(0,TIMING_BATTLE_PHASE)
 	e3:SetCondition(s.bancon)
 	e3:SetCost(s.bancost)
 	e3:SetTarget(s.bantg)
 	e3:SetOperation(s.banop)
 	c:RegisterEffect(e3)
 
-	-- Effect 4: End Phase: Banish any number of Xyz Monsters from GY to gain 500 ATK for each card in banished zone
+	-- Effect 4: End Phase: Banish any number of Xyz Monsters from GY to gain 500 ATK for each Xyz monster in the banished zone
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,2))
 	e4:SetCategory(CATEGORY_REMOVE+CATEGORY_ATKCHANGE)
 	e4:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_O)
 	e4:SetCode(EVENT_PHASE+PHASE_END)
 	e4:SetRange(LOCATION_MZONE)
-	e4:SetCountLimit(1,id+200)
-	e4:SetTarget(s.atkcon_tg)
-	e4:SetOperation(s.atkcon_op)
+	e4:SetCountLimit(1,id+200) -- Hard Once Per Turn
+	e4:SetTarget(s.atktg)
+	e4:SetOperation(s.atkop)
 	c:RegisterEffect(e4)
 end
 
 s.listed_names={93717133} -- Galaxy-Eyes Photon Dragon ID
 
--- Effect 1 Handlers (Immunity)
+-- Effect 1 (Immunity Condition)
 function s.immcon(e)
 	return e:GetHandler():GetOverlayGroup():IsExists(Card.IsCode,1,nil,93717133)
 end
@@ -69,7 +69,7 @@ function s.efilter(e,te)
 	return te:GetOwnerPlayer()~=e:GetHandlerPlayer()
 end
 
--- Effect 2 Handlers (Search + Special Summon)
+-- Effect 2 (Search + Special Summon)
 function s.thcon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():IsSummonType(SUMMON_TYPE_XYZ)
 end
@@ -89,8 +89,7 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	if #g>0 and Duel.SendtoHand(g,nil,REASON_EFFECT)>0 and g:GetFirst():IsLocation(LOCATION_HAND) then
 		Duel.ConfirmCards(1-tp,g)
 		if Duel.GetLocationCount(tp,LOCATION_MZONE)>0 
-			and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_HAND,0,1,nil,e,tp)
-			and Duel.SelectYesNo(tp,aux.Stringid(id,3)) then
+			and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_HAND,0,1,nil,e,tp) then
 			Duel.BreakEffect()
 			Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
 			local sg=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_HAND,0,1,1,nil,e,tp)
@@ -101,11 +100,12 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 3 Handlers (Battle Step Intercept Banish)
+-- Effect 3 (Battle Step Intercept Banish)
 function s.bancon(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	local bc=c:GetBattleTarget()
-	return Duel.IsBattlePhase() and bc and bc:IsControler(1-tp) and bc:IsRelateToBattle()
+	return Duel.GetCurrentPhase()==PHASE_BATTLE and Duel.GetCurrentChain()==0
+		and bc and bc:IsControler(1-tp) and bc:IsRelateToBattle()
 end
 function s.bancost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return e:GetHandler():CheckRemoveOverlayCard(tp,1,REASON_COST) end
@@ -120,19 +120,20 @@ function s.banop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	local bc=c:GetBattleTarget()
 	if bc and bc:IsRelateToBattle() and Duel.Remove(bc,POS_FACEUP,REASON_EFFECT)>0 then
-		-- Return to field tracking event setup
-		local e1=Effect.CreateEffect(c)
-		e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-		e1:SetCode(EVENT_PHASE+PHASE_BATTLE)
-		e1:SetCountLimit(1)
-		e1:SetLabelObject(bc)
-		e1:SetCondition(s.retcon)
-		e1:SetOperation(s.retop)
-		e1:SetReset(RESET_PHASE+PHASE_BATTLE)
-		Duel.RegisterEffect(e1,tp)
-		
-		-- Gain second attack capability
-		if c:IsRelateToEffect(e) then
+		if bc:IsLocation(LOCATION_REMOVED) then
+			-- System event mapping to return the target card cleanly at the end of the Battle Phase
+			local e1=Effect.CreateEffect(c)
+			e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
+			e1:SetCode(EVENT_PHASE+PHASE_BATTLE)
+			e1:SetCountLimit(1)
+			e1:SetLabelObject(bc)
+			e1:SetCondition(s.retcon)
+			e1:SetOperation(s.retop)
+			e1:SetReset(RESET_PHASE+PHASE_BATTLE)
+			Duel.RegisterEffect(e1,tp)
+		end
+		-- Allow second attack
+		if c:IsRelateToEffect(e) and c:IsFaceup() then
 			local e2=Effect.CreateEffect(c)
 			e2:SetType(EFFECT_TYPE_SINGLE)
 			e2:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
@@ -145,7 +146,7 @@ function s.banop(e,tp,eg,ep,ev,re,r,rp)
 end
 function s.retcon(e,tp,eg,ep,ev,re,r,rp)
 	local tc=e:GetLabelObject()
-	return tc and tc:GetReasonEffect():GetHandler()==e:GetOwner()
+	return tc and tc:IsLocation(LOCATION_REMOVED)
 end
 function s.retop(e,tp,eg,ep,ev,re,r,rp)
 	local tc=e:GetLabelObject()
@@ -154,22 +155,25 @@ function s.retop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 4 Handlers (End Phase Steer)
+-- Effect 4 (End Phase ATK Gain setup)
 function s.xyzgyfilter(c)
 	return c:IsType(TYPE_XYZ) and c:IsAbleToRemove()
 end
-function s.atkcon_tg(e,tp,eg,ep,ev,re,r,rp,chk)
+function s.xyzbanfilter(c)
+	return c:IsFaceup() and c:IsType(TYPE_XYZ)
+end
+function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.xyzgyfilter,tp,LOCATION_GRAVE,0,1,nil) end
 	Duel.SetOperationInfo(0,CATEGORY_REMOVE,nil,1,tp,LOCATION_GRAVE)
 end
-function s.atkcon_op(e,tp,eg,ep,ev,re,r,rp)
+function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local c=e:GetHandler()
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,s.xyzgyfilter,tp,LOCATION_GRAVE,0,1,99,nil)
 	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)>0 then
 		if c:IsRelateToEffect(e) and c:IsFaceup() then
-			-- Calculate completely based on absolute size of face-up banished zone items
-			local ct=Duel.GetMatchingGroupCount(Card.IsFaceup,tp,LOCATION_REMOVED,LOCATION_REMOVED,nil)
+			-- Counts ALL Xyz monsters in the banished zone as specified by the card text
+			local ct=Duel.GetMatchingGroupCount(s.xyzbanfilter,tp,LOCATION_REMOVED,LOCATION_REMOVED,nil)
 			if ct>0 then
 				Duel.BreakEffect()
 				local e1=Effect.CreateEffect(c)
