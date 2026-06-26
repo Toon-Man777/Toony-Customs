@@ -1,5 +1,4 @@
 --Great Zero Magic, Numerical Shift
-function c17755990.initial_effect(c)
 local s,id=GetID()
 function s.initial_effect(c)
 	-- Effect 1: Reveal 1 "Zero" Monster from Deck/Extra Deck to Special Summon it (ignoring conditions)
