@@ -42,7 +42,7 @@ function s.initial_effect(c)
 	e3:SetOperation(s.banop)
 	c:RegisterEffect(e3)
 
-	-- Effect 4: Ignition Effect: Detach 1, banish any number of Xyz Monsters from GY to gain 500 ATK per banished monster
+	-- Effect 4: Ignition Effect: Detach 1, banish any number of Xyz Monsters from GY to gain ATK
 	local e4=Effect.CreateEffect(c)
 	e4:SetDescription(aux.Stringid(id,2))
 	e4:SetCategory(CATEGORY_REMOVE+CATEGORY_ATKCHANGE)
@@ -111,7 +111,7 @@ function s.banop(e,tp,eg,ep,ev,re,r,rp)
 	local bc=c:GetBattleTarget()
 	if bc and bc:IsRelateToBattle() and Duel.Remove(bc,POS_FACEUP,REASON_EFFECT)>0 then
 		if bc:IsLocation(LOCATION_REMOVED) then
-			-- Delays return cleanly until the end of the Battle Phase
+			-- Create the end of Battle Phase return tracking loop
 			local e1=Effect.CreateEffect(c)
 			e1:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
 			e1:SetCode(EVENT_PHASE+PHASE_BATTLE)
@@ -163,7 +163,7 @@ function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	local g=Duel.SelectMatchingCard(tp,s.xyzgyfilter,tp,LOCATION_GRAVE,0,1,99,nil)
 	if #g>0 and Duel.Remove(g,POS_FACEUP,REASON_EFFECT)>0 then
 		if c:IsRelateToEffect(e) and c:IsFaceup() then
-			-- Dynamic calculation counting ALL items currently in the Banished Zone
+			-- Check total count of cards currently occupying the Banished Zone
 			local ct=Duel.GetMatchingGroupCount(nil,tp,LOCATION_REMOVED,LOCATION_REMOVED,nil)
 			if ct>0 then
 				local e1=Effect.CreateEffect(c)
