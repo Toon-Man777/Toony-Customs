@@ -1,21 +1,21 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Fusion Summon materials: 3 "Slime" Monsters
+	-- Fusion Summon Procedure: 2 Aqua monsters + 1 Level 10 WATER monster
 	c:EnableReviveLimit()
-	Fusion.AddProcMixN(c,true,true,s.matfilter,3)
-	
-	-- 1. Alternative Contact Fusion Summon
+	Fusion.AddProcedure(c,s.fusfilter,3,3,s.chk)
+
+	-- Alternative Special Summon Condition (Contact Fusion style)
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
-	e1:SetCode(EFFECT_SPSUMMON_PROC)
 	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
+	e1:SetCode(EFFECT_SPSUMMON_PROC)
 	e1:SetRange(LOCATION_EXTRA)
-	e1:SetCondition(s.altcon)
-	e1:SetTarget(s.alttg)
-	e1:SetOperation(s.altop)
+	e1:SetCondition(s.sprcon)
+	e1:SetTarget(s.sprtg)
+	e1:SetOperation(s.sprop)
 	c:RegisterEffect(e1)
-	
-	-- 2. On Special Summoned from Extra Deck: Search "Cursed Star Crimson Eclipse"
+
+	-- Effect 1: If Special Summoned from Extra Deck: Add 1 "Cursed" Spell
 	local e2=Effect.CreateEffect(c)
 	e2:SetDescription(aux.Stringid(id,0))
 	e2:SetCategory(CATEGORY_TOHAND+CATEGORY_SEARCH)
@@ -26,18 +26,16 @@ function s.initial_effect(c)
 	e2:SetTarget(s.thtg)
 	e2:SetOperation(s.thop)
 	c:RegisterEffect(e2)
-	
-	-- 3. Quick Effect: When a "Slime" monster is summoned, buff it and give it temporary immunity
+
+	-- Effect 2: When an Aqua monster is summoned, give it 1000 ATK
 	local e3=Effect.CreateEffect(c)
 	e3:SetDescription(aux.Stringid(id,1))
 	e3:SetCategory(CATEGORY_ATKCHANGE)
-	e3:SetType(EFFECT_TYPE_QUICK_O)
-	e3:SetProperty(EFFECT_FLAG_DELAY)
+	e3:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_TRIGGER_F)
 	e3:SetCode(EVENT_SUMMON_SUCCESS)
 	e3:SetRange(LOCATION_MZONE)
-	e3:SetCondition(s.bufcon)
-	e3:SetTarget(s.buftg)
-	e3:SetOperation(s.bufop)
+	e3:SetTarget(s.atktg)
+	e3:SetOperation(s.atkop)
 	c:RegisterEffect(e3)
 	local e3b=e3:Clone()
 	e3b:SetCode(EVENT_SPSUMMON_SUCCESS)
@@ -45,102 +43,97 @@ function s.initial_effect(c)
 	local e3c=e3:Clone()
 	e3c:SetCode(EVENT_FLIP_SUMMON_SUCCESS)
 	c:RegisterEffect(e3c)
-	
-	-- 4. Continuous: Gain 500 ATK for each Slime monster you control
+
+	-- Effect 3: WATER Aqua monsters you control cannot be targeted or destroyed by card effects
 	local e4=Effect.CreateEffect(c)
-	e4:SetType(EFFECT_TYPE_SINGLE)
-	e4:SetCode(EFFECT_UPDATE_ATTACK)
-	e4:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
+	e4:SetType(EFFECT_TYPE_FIELD)
+	e4:SetCode(EFFECT_CANNOT_BE_EFFECT_TARGET)
+	e4:SetProperty(EFFECT_FLAG_IGNORE_IMMUNE)
 	e4:SetRange(LOCATION_MZONE)
-	e4:SetValue(s.atkval)
+	e4:SetTargetRange(LOCATION_MZONE,0)
+	e4:SetTarget(s.prottg)
+	e4:SetValue(aux.tgoval)
 	c:RegisterEffect(e4)
-	
-	-- 5. Column Floodgate: If you control 3 or more Slimes, lock opponent's same-column cards
-	local e5=Effect.CreateEffect(c)
-	e5:SetType(EFFECT_TYPE_FIELD)
-	e5:SetCode(EFFECT_CANNOT_ACTIVATE)
-	e5:SetProperty(EFFECT_FLAG_PLAYER_TARGET)
-	e5:SetRange(LOCATION_MZONE)
-	e5:SetTargetRange(0,1)
-	e5:SetCondition(s.colcon)
-	e5:SetValue(s.colval)
+	local e5=e4:Clone()
+	e5:SetCode(EFFECT_INDESTRUCTABLE_EFFECT)
+	e5:SetValue(aux.indoval)
 	c:RegisterEffect(e5)
-	
-	-- 6. Pay LP in multiples of 1000 & Banish Eclipse: Special Summon non-fusion Slimes from GY
+
+	-- Effect 4: Gains 500 ATK for each "Slime" monster you control
 	local e6=Effect.CreateEffect(c)
-	e6:SetDescription(aux.Stringid(id,2))
-	e6:SetCategory(CATEGORY_SPECIAL_SUMMON)
-	e6:SetType(EFFECT_TYPE_IGNITION)
+	e6:SetType(EFFECT_TYPE_SINGLE)
+	e6:SetCode(EFFECT_UPDATE_ATTACK)
+	e6:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
 	e6:SetRange(LOCATION_MZONE)
-	e6:SetCountLimit(1)
-	e6:SetCost(s.spcost)
-	e6:SetTarget(s.sptg)
-	e6:SetOperation(s.spop)
+	e6:SetValue(s.atkval)
 	c:RegisterEffect(e6)
+
+	-- Effect 5: Opponent's monsters in the same column as a "Slime" monster cannot activate effects
+	local e7=Effect.CreateEffect(c)
+	e7:SetType(EFFECT_TYPE_FIELD)
+	e7:SetCode(EFFECT_CANNOT_TRIGGER)
+	e7:SetRange(LOCATION_MZONE)
+	e7:SetTargetRange(0,LOCATION_MZONE)
+	e7:SetTarget(s.distg)
+	c:RegisterEffect(e7)
+
+	-- Effect 6: Pay LP in multiples of 100 + Banish 1 "Cursed" card: Special Summon "Slime" monsters from GY
+	local e8=Effect.CreateEffect(c)
+	e8:SetDescription(aux.Stringid(id,2))
+	e8:SetCategory(CATEGORY_SPECIAL_SUMMON)
+	e8:SetType(EFFECT_TYPE_IGNITION)
+	e8:SetRange(LOCATION_MZONE)
+	e8:SetCountLimit(1) -- Once per turn
+	e8:SetCost(s.spcost)
+	e8:SetTarget(s.sptg)
+	e8:SetOperation(s.spop)
+	c:RegisterEffect(e8)
 end
 
-s.eclipse_name = "Cursed Star Crimson Eclipse"
-
--- Standard material check (Using official hexcode 0x54b)
-function s.matfilter(c,fc,sumtype,tp)
-	return c:IsSetCard(0x54b)
+-- Fusion material helper checks
+function s.fusfilter(c,fc,sumtype,tp)
+	return c:IsRace(RACE_AQUA,fc,sumtype,tp) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp))
+end
+function s.chk(g,fc,sumtype,tp)
+	if #g~=3 then return false end
+	local c1=g:IsExists(Card.IsRace,2,nil,RACE_AQUA,fc,sumtype,tp)
+	local c2=g:IsExists(function(c) return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp) end,1,nil)
+	return c1 and c2
 end
 
--- Alternative Contact Summon Filters
-function s.altcfilter1(c)
-	return c:IsSetCard(0x54b) and c:IsAbleToGraveAsCost()
+-- Alternative Contact-style Special Summon logic
+function s.spcfilter(c,tp)
+	return c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
 end
-function s.altcfilter2(c)
-	return c:IsFaceup() and c:IsLevel(10) and c:IsRace(RACE_AQUA) and c:IsAbleToGraveAsCost()
-end
-function s.altcon(e,c,og,min,max)
+function s.sprcon(e,c)
 	if c==nil then return true end
 	local tp=c:GetControler()
-	local g1=Duel.GetMatchingGroup(s.altcfilter1,tp,LOCATION_MZONE,0,nil)
-	local g2=Duel.GetMatchingGroup(s.altcfilter2,tp,LOCATION_MZONE,0,nil)
-	return (Duel.GetLocationCountFromEx(tp,tp,nil,c)>0 and #g1>=3) or (Duel.GetLocationCountFromEx(tp,tp,nil,c)>0 and #g2>=1)
+	return Duel.GetLocationCount(tp,LOCATION_MZONE)>-1
+		and Duel.IsExistingMatchingCard(s.spcfilter,tp,LOCATION_MZONE,0,1,nil,tp)
 end
-function s.alttg(e,tp,eg,ep,ev,re,r,rp,chk,c,og,min,max)
-	local g1=Duel.GetMatchingGroup(s.altcfilter1,tp,LOCATION_MZONE,0,nil)
-	local g2=Duel.GetMatchingGroup(s.altcfilter2,tp,LOCATION_MZONE,0,nil)
-	
-	local b1 = #g1>=3
-	local b2 = #g2>=1
-	
-	local op=Duel.SelectEffect(tp,
-		{b1, aux.Stringid(id,3)}, -- Tribute 3 Slimes
-		{b2, aux.Stringid(id,4)}) -- Tribute 1 Lvl 10 Aqua
-		
-	local sg=Group.CreateGroup()
-	if op==1 then
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
-		sg=g1:Select(tp,3,3,nil)
-	else
-		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TOGRAVE)
-		sg=g2:Select(tp,1,1,nil)
-	end
-	
-	if #sg>0 then
-		sg:KeepAlive()
-		e:SetLabelObject(sg)
+function s.sprtg(e,tp,eg,ep,ev,re,r,rp,chk,c)
+	local g=Duel.GetMatchingGroup(s.spcfilter,tp,LOCATION_MZONE,0,nil,tp)
+	local rg=aux.SelectUnselectGroup(g,e,tp,1,1,nil,1,tp)
+	if #rg>0 then
+		rg:KeepAlive()
+		e:SetLabelObject(rg)
 		return true
 	end
 	return false
 end
-function s.altop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
-	local g=e:GetLabelObject()
-	if not g then return end
-	Duel.Release(g,REASON_COST)
-	c:SetMaterial(g)
-	g:DeleteWithCell()
+function s.sprop(e,tp,eg,ep,ev,re,r,rp,c)
+	local rg=e:GetLabelObject()
+	if not rg then return end
+	Duel.Release(rg,REASON_COST)
+	rg:Delete()
 end
 
--- Effect 2: Search Logic
+-- Effect 1 (Search "Cursed" Spell)
 function s.thcon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():IsPreviousLocation(LOCATION_EXTRA)
 end
 function s.thfilter(c)
-	return c:IsCleanName(s.eclipse_name) and c:IsAbleToHand()
+	return c:IsSetCard(0x923) and c:IsType(TYPE_SPELL) and c:IsAbleToHand()
 end
 function s.thtg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.thfilter,tp,LOCATION_DECK,0,1,nil) end
@@ -155,131 +148,94 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 3: Give Summoned Slime ATK & Immunity
-function s.slime_filter(c)
-	return c:IsFaceup() and c:IsSetCard(0x54b)
+-- Effect 2 (+1000 ATK on Aqua Summon)
+function s.atkfilter(c)
+	return c:IsFaceup() and c:IsRace(RACE_AQUA)
 end
-function s.bufcon(e,tp,eg,ep,ev,re,r,rp)
-	return eg:IsExists(s.slime_filter,1,nil)
-end
-function s.buftg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return true end
-	local g=eg:Filter(s.slime_filter,nil)
+function s.atktg(e,tp,eg,ep,ev,re,r,rp,chk)
+	if chk==0 then return eg:IsExists(s.atkfilter,1,nil) end
+	local g=eg:Filter(s.atkfilter,nil)
 	Duel.SetTargetCard(g)
 end
-function s.bufop(e,tp,eg,ep,ev,re,r,rp)
-	local c=e:GetHandler()
-	local g=Duel.GetTargetCards(e)
+function s.atkop(e,tp,eg,ep,ev,re,r,rp)
+	local g=Duel.GetTargetCards(e):Filter(Card.IsFaceup,nil)
 	for tc in aux.Next(g) do
-		if tc:IsFaceup() and tc:IsLocation(LOCATION_MZONE) then
-			-- Gain 1000 ATK
-			local e1=Effect.CreateEffect(c)
-			e1:SetType(EFFECT_TYPE_SINGLE)
-			e1:SetCode(EFFECT_UPDATE_ATTACK)
-			e1:SetValue(1000)
-			e1:SetReset(RESET_EVENT+RESETS_STANDARD)
-			tc:RegisterEffect(e1)
-			
-			-- Grant Immunity: Unaffected by opponent's card effects
-			local e2=Effect.CreateEffect(c)
-			e2:SetType(EFFECT_TYPE_SINGLE)
-			e2:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
-			e2:SetRange(LOCATION_MZONE)
-			e2:SetCode(EFFECT_IMMUNE_EFFECT)
-			e2:SetValue(s.unaffected_filter)
-			e2:SetReset(RESET_EVENT+RESETS_STANDARD)
-			tc:RegisterEffect(e2)
-			
-			-- Self Destruct during the End Phase
-			local e3=Effect.CreateEffect(c)
-			e3:SetType(EFFECT_TYPE_FIELD+EFFECT_TYPE_CONTINUOUS)
-			e3:SetCode(EVENT_PHASE+PHASE_END)
-			e3:SetCountLimit(1)
-			e3:SetRange(LOCATION_MZONE)
-			e3:SetOperation(s.desop)
-			e3:SetReset(RESET_EVENT+RESETS_STANDARD+RESET_PHASE+PHASE_END)
-			tc:RegisterEffect(e3)
-		end
+		local e1=Effect.CreateEffect(e:GetHandler())
+		e1:SetType(EFFECT_TYPE_SINGLE)
+		e1:SetCode(EFFECT_UPDATE_ATTACK)
+		e1:SetValue(1000)
+		e1:SetReset(RESET_EVENT+RESETS_STANDARD)
+		tc:RegisterEffect(e1)
 	end
 end
-function s.unaffected_filter(e,te)
-	return te:GetOwnerPlayer()~=e:GetHandlerPlayer()
-end
-function s.desop(e,tp,eg,ep,ev,re,r,rp)
-	Duel.Destroy(e:GetHandler(),REASON_EFFECT)
+
+-- Effect 3 (Protection Target Conditions)
+function s.prottg(e,c)
+	return c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_AQUA)
 end
 
--- Effect 4: Static Slime Tracker
+-- Effect 4 (Gains 500 ATK per Slime)
+function s.slimefilter(c)
+	return c:IsFaceup() and c:IsSetCard(0x54b)
+end
 function s.atkval(e,c)
-	return Duel.GetMatchingGroupCount(s.slime_filter,e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)*500
+	return Duel.GetMatchingGroupCount(s.slimefilter,e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)*500
 end
 
--- Effect 5: Column Floodgate Logic
-function s.colcon(e)
-	return Duel.GetMatchingGroupCount(s.slime_filter,e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)>=3
-end
-function s.colval(e,re,rp)
+-- Effect 5 (Column Activating Disabler)
+function s.distg(e,c)
 	local tp=e:GetHandlerPlayer()
-	local rc=re:GetHandler()
-	if not rc:IsOnField() then return false end
-	local zone=0
-	local g=Duel.GetMatchingGroup(s.slime_filter,tp,LOCATION_MZONE,0,nil)
+	local g=Duel.GetMatchingGroup(s.slimefilter,tp,LOCATION_MZONE,0,nil)
+	local col=0
 	for tc in aux.Next(g) do
-		zone=zone|tc:GetColumnZone(LOCATION_ONFIELD)
+		col=col|tc:GetColumnZone(LOCATION_MZONE)
 	end
-	return rc:IsColumnZone(zone,tp)
+	return (c:GetColumnZone(LOCATION_MZONE)&col)~=0
 end
 
--- Effect 6: Pay LP in Multiples of 1000 Engine
-function s.costcfilter(c)
-	return c:IsCleanName(s.eclipse_name) and c:IsAbleToBanishAsCost()
+-- Effect 6 (GY Special Summon multi-pay calculation logic)
+function s.costfilter(c)
+	return c:IsSetCard(0x923) and c:IsAbleToRemoveAsCost()
 end
-function s.spfilter(c,e,tp)
-	return c:IsSetCard(0x54b) and not c:IsType(TYPE_FUSION) 
-		and c:IsCanBeSpecialSummoned(e,0,tp,false,false,POS_FACEUP_ATTACK)
+function s.spfilter2(c,e,tp)
+	return c:IsSetCard(0x54b) and not c:IsType(TYPE_FUSION) and c:IsCanBeSpecialSummoned(e,0,tp,false,false,POS_DEFENSE)
 end
 function s.spcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	local max_mzone = Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if chk==0 then 
-		return Duel.IsExistingMatchingCard(s.costcfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,nil)
-			and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_GRAVE,0,1,nil,e,tp)
-			and Duel.CheckLPCost(tp,1000) and max_mzone >= 2
-	end
-	
-	local max_lp = Duel.GetLP(tp)
-	local max_possible_multiples = math.floor(max_lp / 1000)
-	local max_spawn_limit = math.floor(max_mzone / 2)
-	
-	local limit = math.min(max_possible_multiples, max_spawn_limit)
-	
-	local t = {}
-	for i=1,limit do
-		table.insert(t, i*1000)
-	end
-	
-	local payment = Duel.AnnounceNumber(tp,table.unpack(t))
-	Duel.PayLPCost(tp,payment)
+	local lp=Duel.GetLP(tp)
+	local max_paying=math.floor(lp/300)*300
+	if chk==0 then return Duel.IsExistingMatchingCard(s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,nil)
+		and max_paying>=300 and Duel.CheckLPCost(tp,300) end
 	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
-	local g=Duel.SelectMatchingCard(tp,s.costcfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,1,nil)
-	Duel.Remove(g,POS_FACEUP,REASON_COST)
+	local cg=Duel.SelectMatchingCard(tp,s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,1,nil)
+	Duel.Remove(cg,POS_FACEUP,REASON_COST)
 	
-	e:SetLabel(math.floor(payment/500))
+	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
+	if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then ft=1 end
+	local max_count=math.min(ft,math.floor(max_paying/300))
+	
+	local options={}
+	for i=1,max_count do
+		table.insert(options,i*300)
+	end
+	local pay=Duel.AnnounceNumber(tp,table.unpack(options))
+	Duel.PayLPCost(tp,pay)
+	e:SetLabel(pay/300)
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return true end
+	if chk==0 then return Duel.IsExistingMatchingCard(s.spfilter2,tp,LOCATION_GRAVE,0,1,nil,e,tp) end
 	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_GRAVE)
 end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
-	local count = e:GetLabel()
-	local mzone_count = Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if count <= 0 or mzone_count <= 0 then return end
-	
-	local max_to_summon = math.min(count, mzone_count)
+	local count=e:GetLabel()
+	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
+	if ft<=0 then return end
+	if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then ft=1 end
+	local final_count=math.min(count,ft)
 	
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter),tp,LOCATION_GRAVE,0,1,max_to_summon,nil,e,tp)
+	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter2),tp,LOCATION_GRAVE,0,1,final_count,nil,e,tp)
 	if #g>0 then
-		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP_ATTACK)
+		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_DEFENSE)
 	end
 end
