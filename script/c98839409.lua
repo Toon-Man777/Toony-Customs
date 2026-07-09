@@ -2,7 +2,8 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Fusion Summon Procedure: 2 Aqua monsters + 1 Level 10 WATER monster
 	c:EnableReviveLimit()
-	Fusion.AddProcedure(c,s.fusfilter,3,3,s.chk)
+	-- Legacy-compatible procedure to completely fix the line 5 'AddProcedure' crash
+	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
 
 	-- Alternative Special Summon Condition (Contact Fusion style)
 	local e1=Effect.CreateEffect(c)
@@ -90,15 +91,13 @@ function s.initial_effect(c)
 	c:RegisterEffect(e8)
 end
 
--- Fusion material helper checks
+-- Fusion Filter verification setup for 2 Aqua monsters
 function s.fusfilter(c,fc,sumtype,tp)
-	return c:IsRace(RACE_AQUA,fc,sumtype,tp) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp))
+	return c:IsRace(RACE_AQUA,fc,sumtype,tp)
 end
-function s.chk(g,fc,sumtype,tp)
-	if #g~=3 then return false end
-	local c1=g:IsExists(Card.IsRace,2,nil,RACE_AQUA,fc,sumtype,tp)
-	local c2=g:IsExists(function(c) return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp) end,1,nil)
-	return c1 and c2
+-- Verification check validation requires third material to be a Lv 10 WATER card
+function s.chk(c,fc,sumtype,tp)
+	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
 end
 
 -- Alternative Contact-style Special Summon logic
