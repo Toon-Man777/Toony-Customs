@@ -1,9 +1,16 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Fusion Summon Procedure: 2 Aqua monsters + 1 Level 10 WATER monster
+	-- Manual Fusion Summon Procedure (Bypasses missing engine libraries completely)
 	c:EnableReviveLimit()
-	-- Legacy-compatible procedure to completely fix the line 5 'AddProcedure' crash
-	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_FIELD)
+	e0:SetProperty(EFFECT_FLAG_UNCOPYABLE)
+	e0:SetCode(EFFECT_SPSUMMON_PROC)
+	e0:SetRange(LOCATION_EXTRA)
+	e0:SetCondition(s.fuscon)
+	e0:SetTarget(s.fustg)
+	e0:SetOperation(s.fusop)
+	c:RegisterEffect(e0)
 
 	-- Alternative Special Summon Condition (Contact Fusion style)
 	local e1=Effect.CreateEffect(c)
@@ -91,13 +98,36 @@ function s.initial_effect(c)
 	c:RegisterEffect(e8)
 end
 
--- Fusion Filter verification setup for 2 Aqua monsters
-function s.fusfilter(c,fc,sumtype,tp)
-	return c:IsRace(RACE_AQUA,fc,sumtype,tp)
+-- Custom Standard Fusion Verification Logic (2x Aqua + 1x Lv10 WATER)
+function s.fmatfilter(c,tp)
+	return (c:IsRace(RACE_AQUA) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER))) and c:IsCanBeFusionMaterial()
 end
--- Verification check validation requires third material to be a Lv 10 WATER card
-function s.chk(c,fc,sumtype,tp)
-	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
+function s.freschk(g)
+	return g:IsExists(Card.IsRace,2,nil,RACE_AQUA) 
+		and g:IsExists(function(c) return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER) end,1,nil)
+end
+function s.fuscon(e,c)
+	if c==nil then return true end
+	local tp=c:GetControler()
+	local mg=Duel.GetMatchingGroup(s.fmatfilter,tp,LOCATION_MZONE+LOCATION_HAND,0,nil,tp)
+	return mg:CheckGroup(s.freschk,3,3)
+end
+function s.fustg(e,tp,eg,ep,ev,re,r,rp,chk,c)
+	local mg=Duel.GetMatchingGroup(s.fmatfilter,tp,LOCATION_MZONE+LOCATION_HAND,0,nil,tp)
+	local g=mg:SelectGroup(tp,s.freschk,3,3)
+	if #g==3 then
+		g:KeepAlive()
+		e:SetLabelObject(g)
+		return true
+	end
+	return false
+end
+function s.fusop(e,tp,eg,ep,ev,re,r,rp,c)
+	local g=e:GetLabelObject()
+	if not g then return end
+	c:SetMaterial(g)
+	Duel.SendtoGrave(g,REASON_MATERIAL+REASON_FUSION)
+	g:Delete()
 end
 
 -- Alternative Contact-style Special Summon logic
