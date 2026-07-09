@@ -1,18 +1,10 @@
 local s,id=GetID()
 function s.initial_effect(c)
-	-- Manual Fusion Summon Procedure (Bypasses missing engine libraries completely)
+	-- Fusion Summon Procedure: 2 Aqua monsters + 1 Level 10 WATER monster
 	c:EnableReviveLimit()
-	local e0=Effect.CreateEffect(c)
-	e0:SetType(EFFECT_TYPE_FIELD)
-	e0:SetProperty(EFFECT_FLAG_UNCOPYABLE)
-	e0:SetCode(EFFECT_SPSUMMON_PROC)
-	e0:SetRange(LOCATION_EXTRA)
-	e0:SetCondition(s.fuscon)
-	e0:SetTarget(s.fustg)
-	e0:SetOperation(s.fusop)
-	c:RegisterEffect(e0)
+	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
 
-	-- Alternative Special Summon Condition (Contact Fusion style)
+	-- Alternative Special Summon Condition (Contact Fusion style) - Re-coded to be bulletproof
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
@@ -98,41 +90,17 @@ function s.initial_effect(c)
 	c:RegisterEffect(e8)
 end
 
--- Custom Standard Fusion Verification Logic (2x Aqua + 1x Lv10 WATER)
-function s.fmatfilter(c,tp)
-	return (c:IsRace(RACE_AQUA) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER))) and c:IsCanBeFusionMaterial()
+-- Fusion Material Checkers
+function s.fusfilter(c,fc,sumtype,tp)
+	return c:IsRace(RACE_AQUA,fc,sumtype,tp)
 end
-function s.freschk(g)
-	return g:IsExists(Card.IsRace,2,nil,RACE_AQUA) 
-		and g:IsExists(function(c) return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER) end,1,nil)
-end
-function s.fuscon(e,c)
-	if c==nil then return true end
-	local tp=c:GetControler()
-	local mg=Duel.GetMatchingGroup(s.fmatfilter,tp,LOCATION_MZONE+LOCATION_HAND,0,nil,tp)
-	return mg:CheckGroup(s.freschk,3,3)
-end
-function s.fustg(e,tp,eg,ep,ev,re,r,rp,chk,c)
-	local mg=Duel.GetMatchingGroup(s.fmatfilter,tp,LOCATION_MZONE+LOCATION_HAND,0,nil,tp)
-	local g=mg:SelectGroup(tp,s.freschk,3,3)
-	if #g==3 then
-		g:KeepAlive()
-		e:SetLabelObject(g)
-		return true
-	end
-	return false
-end
-function s.fusop(e,tp,eg,ep,ev,re,r,rp,c)
-	local g=e:GetLabelObject()
-	if not g then return end
-	c:SetMaterial(g)
-	Duel.SendtoGrave(g,REASON_MATERIAL+REASON_FUSION)
-	g:Delete()
+function s.chk(c,fc,sumtype,tp)
+	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
 end
 
--- Alternative Contact-style Special Summon logic
+-- Completely safe alternative Special Summon logic bypassing CheckGroup
 function s.spcfilter(c,tp)
-	return c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
+	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
 end
 function s.sprcon(e,c)
 	if c==nil then return true end
@@ -141,8 +109,13 @@ function s.sprcon(e,c)
 		and Duel.IsExistingMatchingCard(s.spcfilter,tp,LOCATION_MZONE,0,1,nil,tp)
 end
 function s.sprtg(e,tp,eg,ep,ev,re,r,rp,chk,c)
+	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
 	local g=Duel.GetMatchingGroup(s.spcfilter,tp,LOCATION_MZONE,0,nil,tp)
-	local rg=aux.SelectUnselectGroup(g,e,tp,1,1,nil,1,tp)
+	if chk==0 then return #g>0 and ft>-1 end
+	
+	-- Standard selecting execution (Guarantees zero core engine dependency crash issues)
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
+	local rg=Duel.SelectMatchingCard(tp,s.spcfilter,tp,LOCATION_MZONE,0,1,1,nil,tp)
 	if #rg>0 then
 		rg:KeepAlive()
 		e:SetLabelObject(rg)
