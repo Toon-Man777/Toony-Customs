@@ -4,7 +4,7 @@ function s.initial_effect(c)
 	c:EnableReviveLimit()
 	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
 
-	-- Alternative Special Summon Condition (Contact Fusion style) - Re-coded to be bulletproof
+	-- Alternative Special Summon Condition (Contact Fusion style)
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
@@ -77,10 +77,10 @@ function s.initial_effect(c)
 	e7:SetTarget(s.distg)
 	c:RegisterEffect(e7)
 
-	-- Effect 6: Pay LP in multiples of 100 + Banish 1 "Cursed" card: Special Summon "Slime" monsters from GY
+	-- Effect 6: Once per turn: Banish 1 "Cursed" card, then Special Summon 1 "Slime" monster
 	local e8=Effect.CreateEffect(c)
 	e8:SetDescription(aux.Stringid(id,2))
-	e8:SetCategory(CATEGORY_SPECIAL_SUMMON)
+	e8:SetCategory(CATEGORY_REMOVE+CATEGORY_SPECIAL_SUMMON)
 	e8:SetType(EFFECT_TYPE_IGNITION)
 	e8:SetRange(LOCATION_MZONE)
 	e8:SetCountLimit(1) -- Once per turn
@@ -98,7 +98,7 @@ function s.chk(c,fc,sumtype,tp)
 	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
 end
 
--- Completely safe alternative Special Summon logic bypassing CheckGroup
+-- Alternative Contact Fusion summoning logic (Bypasses CheckGroup crashes)
 function s.spcfilter(c,tp)
 	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
 end
@@ -113,7 +113,6 @@ function s.sprtg(e,tp,eg,ep,ev,re,r,rp,chk,c)
 	local g=Duel.GetMatchingGroup(s.spcfilter,tp,LOCATION_MZONE,0,nil,tp)
 	if chk==0 then return #g>0 and ft>-1 end
 	
-	-- Standard selecting execution (Guarantees zero core engine dependency crash issues)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_RELEASE)
 	local rg=Duel.SelectMatchingCard(tp,s.spcfilter,tp,LOCATION_MZONE,0,1,1,nil,tp)
 	if #rg>0 then
@@ -195,49 +194,29 @@ function s.distg(e,c)
 	return (c:GetColumnZone(LOCATION_MZONE)&col)~=0
 end
 
--- Effect 6 (GY Special Summon multi-pay calculation logic)
+-- Effect 6 (Banish 1 "Cursed" -> Special Summon 1 "Slime")
 function s.costfilter(c)
 	return c:IsSetCard(0x923) and c:IsAbleToRemoveAsCost()
 end
 function s.spfilter2(c,e,tp)
-	return c:IsSetCard(0x54b) and not c:IsType(TYPE_FUSION) and c:IsCanBeSpecialSummoned(e,0,tp,false,false,POS_DEFENSE)
+	return c:IsSetCard(0x54b) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end
 function s.spcost(e,tp,eg,ep,ev,re,r,rp,chk)
-	local lp=Duel.GetLP(tp)
-	local max_paying=math.floor(lp/300)*300
-	if chk==0 then return Duel.IsExistingMatchingCard(s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,nil)
-		and max_paying>=300 and Duel.CheckLPCost(tp,300) end
-	
+	if chk==0 then return Duel.IsExistingMatchingCard(s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,nil) end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
-	local cg=Duel.SelectMatchingCard(tp,s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,1,nil)
-	Duel.Remove(cg,POS_FACEUP,REASON_COST)
-	
-	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then ft=1 end
-	local max_count=math.min(ft,math.floor(max_paying/300))
-	
-	local options={}
-	for i=1,max_count do
-		table.insert(options,i*300)
-	end
-	local pay=Duel.AnnounceNumber(tp,table.unpack(options))
-	Duel.PayLPCost(tp,pay)
-	e:SetLabel(pay/300)
+	local g=Duel.SelectMatchingCard(tp,s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,1,nil)
+	Duel.Remove(g,POS_FACEUP,REASON_COST)
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
-	if chk==0 then return Duel.IsExistingMatchingCard(s.spfilter2,tp,LOCATION_GRAVE,0,1,nil,e,tp) end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_GRAVE)
+	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
+		and Duel.IsExistingMatchingCard(s.spfilter2,tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE,0,1,nil,e,tp) end
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE)
 end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
-	local count=e:GetLabel()
-	local ft=Duel.GetLocationCount(tp,LOCATION_MZONE)
-	if ft<=0 then return end
-	if Duel.IsPlayerAffectedByEffect(tp,CARD_BLUE_EYES_SPIRIT) then ft=1 end
-	local final_count=math.min(count,ft)
-	
+	if Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter2),tp,LOCATION_GRAVE,0,1,final_count,nil,e,tp)
+	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter2),tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil,e,tp)
 	if #g>0 then
-		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_DEFENSE)
+		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
 	end
 end
