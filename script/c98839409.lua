@@ -87,7 +87,7 @@ function s.initial_effect(c)
 	c:RegisterEffect(e7)
 end
 
--- Custom Fusion material checking logic to completely prevent nil field errors
+-- Custom Fusion material checking logic
 function s.matfilter(c,fc,sumtype,tp)
 	return c:IsRace(RACE_AQUA,fc,sumtype,tp) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp))
 end
@@ -124,9 +124,9 @@ function s.fusop(e,tp,eg,ep,ev,re,r,rp,gc,chkf)
 	Duel.SetFusionMaterial(g)
 end
 
--- Contact Fusion alternative summon logic (Tribute 1 Aqua Fusion with 3000 ATK)
+-- Contact Fusion alternative summon logic (Fixed IsCanBeTributed -> IsCanBeReleased)
 function s.spcfilter(c,tp)
-	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
+	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeReleased(tp)
 end
 function s.sprcon(e,c)
 	if c==nil then return true end
