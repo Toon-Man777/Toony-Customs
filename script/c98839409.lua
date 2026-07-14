@@ -124,7 +124,7 @@ function s.fusop(e,tp,eg,ep,ev,re,r,rp,gc,chkf)
 	Duel.SetFusionMaterial(g)
 end
 
--- Contact Fusion alternative summon logic (Fixed to IsReleasable)
+-- Contact Fusion alternative summon logic
 function s.spcfilter(c,tp)
 	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsReleasable()
 end
@@ -239,3 +239,4 @@ function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	if #g>0 then
 		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
 	end
+end
