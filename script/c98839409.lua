@@ -2,7 +2,13 @@ local s,id=GetID()
 function s.initial_effect(c)
 	-- Fusion Summon Procedure: 2 Aqua monsters + 1 Level 10 WATER monster
 	c:EnableReviveLimit()
-	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
+	local e0=Effect.CreateEffect(c)
+	e0:SetType(EFFECT_TYPE_SINGLE)
+	e0:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e0:SetCode(EFFECT_FUSION_MATERIAL)
+	e0:SetCondition(s.fuscon)
+	e0:SetOperation(s.fusop)
+	c:RegisterEffect(e0)
 
 	-- Alternative Special Summon Condition (Contact Fusion style by Tributing)
 	local e1=Effect.CreateEffect(c)
@@ -81,15 +87,44 @@ function s.initial_effect(c)
 	c:RegisterEffect(e7)
 end
 
--- Fusion Material Filter Helpers
-function s.fusfilter(c,fc,sumtype,tp)
-	return c:IsRace(RACE_AQUA,fc,sumtype,tp)
+-- Custom Fusion material checking logic to completely prevent nil field errors
+function s.matfilter(c,fc,sumtype,tp)
+	return c:IsRace(RACE_AQUA,fc,sumtype,tp) or (c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp))
 end
-function s.chk(c,fc,sumtype,tp)
-	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
+function s.fuscon(e,g,gc,chkf)
+	if g==nil then return true end
+	local fc=e:GetHandler()
+	local tp=fc:GetControler()
+	local mg=g:Filter(s.matfilter,nil,fc,SUMMON_TYPE_FUSION,tp)
+	if gc then
+		if not s.matfilter(gc,fc,SUMMON_TYPE_FUSION,tp) then return false end
+		return mg:IsExists(s.chk,1,gc,mg,gc)
+	end
+	return mg:IsExists(s.chk,1,nil,mg,nil)
+end
+function s.chk(c,mg,gc)
+	local g=Group.FromCards(c)
+	if gc then g:AddCard(gc) end
+	if #g==1 then return mg:IsExists(s.chk,1,c,mg,c) end
+	if #g==2 then return mg:IsExists(s.chk,1,g,mg,g) end
+	local aqua_count=g:FilterCount(Card.IsRace,nil,RACE_AQUA)
+	local lv10_count=g:FilterCount(function(tc) return tc:IsLevel(10) and tc:IsAttribute(ATTRIBUTE_WATER) end,nil)
+	return aqua_count>=2 and lv10_count>=1
+end
+function s.fusop(e,tp,eg,ep,ev,re,r,rp,gc,chkf)
+	local fc=e:GetHandler()
+	local mg=eg:Filter(s.matfilter,nil,fc,SUMMON_TYPE_FUSION,tp)
+	local g=Group.CreateGroup()
+	if gc then g:AddCard(gc) end
+	while #g<3 do
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_FMATERIAL)
+		local sg=mg:FilterSelect(tp,s.chk,1,1,g,mg,g)
+		g:Merge(sg)
+	end
+	Duel.SetFusionMaterial(g)
 end
 
--- Contact Fusion Alternative Summon requirements (Tribute 1 Aqua Fusion with 3000 ATK)
+-- Contact Fusion alternative summon logic (Tribute 1 Aqua Fusion with 3000 ATK)
 function s.spcfilter(c,tp)
 	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
 end
