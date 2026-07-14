@@ -4,7 +4,7 @@ function s.initial_effect(c)
 	c:EnableReviveLimit()
 	Duel.AddFusionMonsterProcedure(c,s.chk,s.fusfilter,2,2)
 
-	-- Alternative Special Summon Condition (Contact Fusion style)
+	-- Alternative Special Summon Condition (Contact Fusion style by Tributing)
 	local e1=Effect.CreateEffect(c)
 	e1:SetType(EFFECT_TYPE_FIELD)
 	e1:SetProperty(EFFECT_FLAG_UNCOPYABLE)
@@ -59,38 +59,29 @@ function s.initial_effect(c)
 	e5:SetValue(aux.indoval)
 	c:RegisterEffect(e5)
 
-	-- Effect 4: Gains 500 ATK for each "Slime" monster you control
+	-- Effect 4: Opponent's monsters in the same column as an Aqua monster cannot activate effects
 	local e6=Effect.CreateEffect(c)
-	e6:SetType(EFFECT_TYPE_SINGLE)
-	e6:SetCode(EFFECT_UPDATE_ATTACK)
-	e6:SetProperty(EFFECT_FLAG_SINGLE_RANGE)
+	e6:SetType(EFFECT_TYPE_FIELD)
+	e6:SetCode(EFFECT_CANNOT_TRIGGER)
 	e6:SetRange(LOCATION_MZONE)
-	e6:SetValue(s.atkval)
+	e6:SetTargetRange(0,LOCATION_MZONE)
+	e6:SetTarget(s.distg)
 	c:RegisterEffect(e6)
 
-	-- Effect 5: Opponent's monsters in the same column as a "Slime" monster cannot activate effects
+	-- Effect 5: Once per turn: Banish 1 "Cursed" card, then Special Summon 1 Aqua monster from GY
 	local e7=Effect.CreateEffect(c)
-	e7:SetType(EFFECT_TYPE_FIELD)
-	e7:SetCode(EFFECT_CANNOT_TRIGGER)
+	e7:SetDescription(aux.Stringid(id,2))
+	e7:SetCategory(CATEGORY_REMOVE+CATEGORY_SPECIAL_SUMMON)
+	e7:SetType(EFFECT_TYPE_IGNITION)
 	e7:SetRange(LOCATION_MZONE)
-	e7:SetTargetRange(0,LOCATION_MZONE)
-	e7:SetTarget(s.distg)
+	e7:SetCountLimit(1)
+	e7:SetCost(s.spcost)
+	e7:SetTarget(s.sptg)
+	e7:SetOperation(s.spop)
 	c:RegisterEffect(e7)
-
-	-- Effect 6: Once per turn: Banish 1 "Cursed" card, then Special Summon 1 "Slime" monster
-	local e8=Effect.CreateEffect(c)
-	e8:SetDescription(aux.Stringid(id,2))
-	e8:SetCategory(CATEGORY_REMOVE+CATEGORY_SPECIAL_SUMMON)
-	e8:SetType(EFFECT_TYPE_IGNITION)
-	e8:SetRange(LOCATION_MZONE)
-	e8:SetCountLimit(1) -- Once per turn
-	e8:SetCost(s.spcost)
-	e8:SetTarget(s.sptg)
-	e8:SetOperation(s.spop)
-	c:RegisterEffect(e8)
 end
 
--- Fusion Material Checkers
+-- Fusion Material Filter Helpers
 function s.fusfilter(c,fc,sumtype,tp)
 	return c:IsRace(RACE_AQUA,fc,sumtype,tp)
 end
@@ -98,7 +89,7 @@ function s.chk(c,fc,sumtype,tp)
 	return c:IsLevel(10) and c:IsAttribute(ATTRIBUTE_WATER,fc,sumtype,tp)
 end
 
--- Alternative Contact Fusion summoning logic (Bypasses CheckGroup crashes)
+-- Contact Fusion Alternative Summon requirements (Tribute 1 Aqua Fusion with 3000 ATK)
 function s.spcfilter(c,tp)
 	return c:IsFaceup() and c:IsType(TYPE_FUSION) and c:IsRace(RACE_AQUA) and c:IsAttack(3000) and c:IsCanBeTributed(tp)
 end
@@ -129,7 +120,7 @@ function s.sprop(e,tp,eg,ep,ev,re,r,rp,c)
 	rg:Delete()
 end
 
--- Effect 1 (Search "Cursed" Spell)
+-- Effect 1 (Search 1 "Cursed" Spell)
 function s.thcon(e,tp,eg,ep,ev,re,r,rp)
 	return e:GetHandler():IsPreviousLocation(LOCATION_EXTRA)
 end
@@ -149,7 +140,7 @@ function s.thop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 2 (+1000 ATK on Aqua Summon)
+-- Effect 2 (+1000 ATK on any Aqua monster Summoned)
 function s.atkfilter(c)
 	return c:IsFaceup() and c:IsRace(RACE_AQUA)
 end
@@ -170,23 +161,15 @@ function s.atkop(e,tp,eg,ep,ev,re,r,rp)
 	end
 end
 
--- Effect 3 (Protection Target Conditions)
+-- Effect 3 Target Filters (Protects WATER Aqua monsters)
 function s.prottg(e,c)
 	return c:IsAttribute(ATTRIBUTE_WATER) and c:IsRace(RACE_AQUA)
 end
 
--- Effect 4 (Gains 500 ATK per Slime)
-function s.slimefilter(c)
-	return c:IsFaceup() and c:IsSetCard(0x54b)
-end
-function s.atkval(e,c)
-	return Duel.GetMatchingGroupCount(s.slimefilter,e:GetHandlerPlayer(),LOCATION_MZONE,0,nil)*500
-end
-
--- Effect 5 (Column Activating Disabler)
+-- Effect 4 (Disables zones in the same column as an Aqua monster)
 function s.distg(e,c)
-	local tp=e:GetHandlerPlayer()
-	local g=Duel.GetMatchingGroup(s.slimefilter,tp,LOCATION_MZONE,0,nil)
+	local tp=e:GetHandlerPlayer() or e:GetOwnerPlayer()
+	local g=Duel.GetMatchingGroup(Card.IsRace,tp,LOCATION_MZONE,LOCATION_MZONE,nil,RACE_AQUA)
 	local col=0
 	for tc in aux.Next(g) do
 		col=col|tc:GetColumnZone(LOCATION_MZONE)
@@ -194,28 +177,30 @@ function s.distg(e,c)
 	return (c:GetColumnZone(LOCATION_MZONE)&col)~=0
 end
 
--- Effect 6 (Banish 1 "Cursed" -> Special Summon 1 "Slime")
+-- Effect 5 (Banish 1 "Cursed" card -> Special Summon 1 Aqua monster from GY)
 function s.costfilter(c)
 	return c:IsSetCard(0x923) and c:IsAbleToRemoveAsCost()
 end
 function s.spfilter2(c,e,tp)
-	return c:IsSetCard(0x54b) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
+	return c:IsRace(RACE_AQUA) and c:IsCanBeSpecialSummoned(e,0,tp,false,false)
 end
 function s.spcost(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.IsExistingMatchingCard(s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,nil) end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_REMOVE)
 	local g=Duel.SelectMatchingCard(tp,s.costfilter,tp,LOCATION_HAND+LOCATION_GRAVE,0,1,1,nil)
-	Duel.Remove(g,POS_FACEUP,REASON_COST)
+	if #g>0 then
+		Duel.Remove(g,POS_FACEUP,REASON_COST)
+	end
 end
 function s.sptg(e,tp,eg,ep,ev,re,r,rp,chk)
 	if chk==0 then return Duel.GetLocationCount(tp,LOCATION_MZONE)>0
-		and Duel.IsExistingMatchingCard(s.spfilter2,tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE,0,1,nil,e,tp) end
-	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE)
+		and Duel.IsExistingMatchingCard(s.spfilter2,tp,LOCATION_GRAVE,0,1,nil,e,tp) end
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_GRAVE)
 end
 function s.spop(e,tp,eg,ep,ev,re,r,rp)
 	if Duel.GetLocationCount(tp,LOCATION_MZONE)<=0 then return end
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
-	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter2),tp,LOCATION_HAND+LOCATION_DECK+LOCATION_GRAVE,0,1,1,nil,e,tp)
+	local g=Duel.SelectMatchingCard(tp,aux.NecroValleyFilter(s.spfilter2),tp,LOCATION_GRAVE,0,1,1,nil,e,tp)
 	if #g>0 then
 		Duel.SpecialSummon(g,0,tp,tp,false,false,POS_FACEUP)
 	end
