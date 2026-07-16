@@ -19,9 +19,6 @@ function s.initial_effect(c)
 	e2:SetTarget(s.sumtg)
 	e2:SetOperation(s.sumop)
 	c:RegisterEffect(e2)
-	
-	-- Duel-wide Special Summon restriction
-	aux.RegisterDoubleSummonLimitSingleType(c,0x28,LOCATION_SZONE)
 end
 
 s.listed_series={0x28} -- "Batteryman" archetype code
@@ -89,10 +86,7 @@ function s.sumop(e,tp,eg,ep,ev,re,r,rp)
 end
 
 -- Setup system-wide activity check for "the turn you activate this card's effects"
--- (Prevents player from activating MAX Power! if they already Special Summoned a non-Thunder monster earlier in the turn)
-function s.initial_effect_post(c)
-	Duel.AddCustomActivityCounter(id,ACTIVITY_SPSUMMON,s.counterfilter)
-end
 function s.counterfilter(c)
 	return c:IsRace(RACE_THUNDER)
 end
+Duel.AddCustomActivityCounter(id,ACTIVITY_SPSUMMON,s.counterfilter)
