@@ -59,33 +59,25 @@ function s.xyzcon(e,c,og,min,max)
 end
 function s.xyztg(e,tp,eg,ep,ev,re,r,rp,chk,c,og,min,max)
 	if og then return false end
+	return true
+end
+function s.xyzop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
 	local g=Duel.GetMatchingGroup(s.xyzfilter,tp,LOCATION_MZONE,0,nil,c,tp)
 	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_XMATERIAL)
 	local sg=g:Select(tp,2,2,nil)
-	if #sg==2 then
-		sg:KeepAlive()
-		e:SetLabelObject(sg)
-		return true
-	end
-	return false
-end
-function s.xyzop(e,tp,eg,ep,ev,re,r,rp,c,og,min,max)
-	local sg=e:GetLabelObject()
-	if not sg then return end
+	if #sg~=2 then return end
+	
 	Duel.RegisterFlagEffect(tp,id,RESET_PHASE+PHASE_END,0,1)
 	
-	-- Transfer materials from the overlayed monsters to this card
-	local mg=Group.CreateGroup()
+	-- Strip existing materials from the targets before overlaying
 	for tc in aux.Next(sg) do
 		local xg=tc:GetOverlayGroup()
 		if #xg>0 then
 			Duel.SendtoGrave(xg,REASON_RULE)
 		end
-		mg:Merge(tc:GetOverlayGroup())
 	end
 	c:SetMaterial(sg)
 	Duel.Overlay(c,sg)
-	sg:Delete()
 end
 
 -- Effect 1 (ATK Gain) Logic
