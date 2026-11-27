@@ -4,8 +4,8 @@ local s, id = GetID()
 
 function s.initial_effect(c)
 	c:EnableReviveLimit()
-	-- Link Summon procedure: 2+ Effect monsters
-	Link.AddProcedure(c, aux.FilterBoolFunctionEx(Card.IsType, TYPE_EFFECT), 2)
+	-- Link Summon procedure: 2+ Effect monsters (Link-4)
+	Link.AddProcedure(c, aux.FilterBoolFunctionEx(Card.IsType, TYPE_EFFECT), 2, 4)
 
 	-- Effect 1: Gains 500 ATK for each card this card points to
 	local e1 = Effect.CreateEffect(c)
@@ -45,7 +45,7 @@ function s.initial_effect(c)
 end
 
 -- Helper: Check if a monster is a valid Tribute this card points to
-function s.cfilter(c, tp)
+function s.cfilter(c)
 	return c:IsType(TYPE_MONSTER) and c:IsReleasable()
 end
 
@@ -57,12 +57,12 @@ end
 -- Negate Condition: Opponent activates a card effect, and this card points to at least 1 tributable monster
 function s.negcon(e, tp, eg, ep, ev, re, r, rp)
 	return rp == 1 - tp and Duel.IsChainNegatable(ev)
-		and e:GetHandler():GetLinkedGroup():IsExists(s.cfilter, 1, nil, tp)
+		and e:GetHandler():GetLinkedGroup():IsExists(s.cfilter, 1, nil)
 end
 
 -- Negate Cost: Tribute 1 monster this card points to
 function s.negcost(e, tp, eg, ep, ev, re, r, rp, chk)
-	local lg = e:GetHandler():GetLinkedGroup():Filter(s.cfilter, nil, tp)
+	local lg = e:GetHandler():GetLinkedGroup():Filter(s.cfilter, nil)
 	if chk == 0 then return #lg > 0 end
 	Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_RELEASE)
 	local g = lg:Select(tp, 1, 1, nil)
@@ -102,4 +102,11 @@ function s.sptg(e, tp, eg, ep, ev, re, r, rp, chk)
 end
 
 -- Special Summon Operation
-function s.spop(e, tp
+function s.spop(e, tp, eg, ep, ev, re, r, rp)
+	if Duel.GetLocationCount(tp, LOCATION_MZONE) <= 0 then return end
+	Duel.Hint(HINT_SELECTMSG, tp, HINTMSG_SPSUMMON)
+	local g = Duel.SelectMatchingCard(tp, s.spfilter, tp, LOCATION_GRAVE, 0, 1, 1, nil, e, tp)
+	if #g > 0 then
+		Duel.SpecialSummon(g, 0, tp, tp, false, false, POS_FACEUP)
+	end
+end
